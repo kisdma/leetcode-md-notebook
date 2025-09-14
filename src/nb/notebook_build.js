@@ -1,0 +1,1 @@
+(function(NS){ function build(params){ const nb={ cells:[], metadata:{ kernelspec:{display_name:'Python 3',language:'python',name:'python3'}, language_info:{ name:'python', version:'3.x' } }, nbformat:4, nbformat_minor:5 }; return { notebook: nb, filename: 'LC-unknown.ipynb' }; } NS.nb.notebook_build={ build }; })(window.LCMD);

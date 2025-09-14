@@ -1,0 +1,1 @@
+(function(NS){ function bootstrap(){ NS.dom.ready.patchHistory(); NS.dom.ready.onReady(()=>{ NS.ui.toolbar.ensure({ onCopyReport:()=>alert('Report TODO'), onCopyLog:()=>alert('Log TODO'), onSaveNotebook:()=>alert('Notebook TODO') }); }); } NS.core.pipeline={ bootstrap }; })(window.LCMD);

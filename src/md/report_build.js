@@ -1,0 +1,1 @@
+(function(NS){ function build({ headerMd, descMd, hintsMd, testcasesMd, subsTableMd, codeSectionsMd }){ return [headerMd||'', descMd||'', hintsMd||'', testcasesMd||'', subsTableMd||'', codeSectionsMd||''].join('\n'); } NS.md.report_build={ build }; })(window.LCMD);

@@ -1,0 +1,1 @@
+(function(){ const root=(typeof unsafeWindow!=='undefined'&&unsafeWindow)||window; if(root.LCMD?.__version) return; root.LCMD=Object.assign(root.LCMD||{}, {__version:'4.0.0-modular', core:{}, ui:{}, capture:{}, lc_api:{}, md:{}, nb:{}, dom:{}, net:{}, util:{}}); })();
