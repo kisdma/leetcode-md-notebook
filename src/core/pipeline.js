@@ -531,8 +531,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
 
     var exA = q && q.exampleTestcases || '';
     var exB = q && q.sampleTestCase || '';
-    var defaultBlob = [exA, exB].filter(nonEmpty).join('
-').trim();
+    var defaultBlob = [exA, exB].filter(nonEmpty).join('\n').trim();
     var capturedBlob = getCustomInput(slug);
     debugLog('pipeline/testcases', { defaultLength: defaultBlob.length, customLength: capturedBlob.length });
 
@@ -696,3 +695,5 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
   };
 
 })(window.LCMD);
+
+
