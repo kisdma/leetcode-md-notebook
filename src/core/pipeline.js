@@ -406,6 +406,30 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
     return String(code).replace(/(^|\n)```+/g, function(m, p1){ return p1 + '# ```'; });
   }
 
+  function commentOutsideFences(input, opts){
+    opts = opts || {};
+    var commentPrefix = typeof opts.commentPrefix === 'string' ? opts.commentPrefix : '# ';
+    var text = String(input || '').replace(/\r\n/g, '\n');
+    var fenceCount = (text.match(/^\s*(```|~~~)/gm) || []).length;
+    if (fenceCount < 2) return text;
+    var lines = text.split('\n');
+    var out = [];
+    var inside = false;
+    var fenceRe = /^\s*(```|~~~)/;
+    for (var i = 0; i < lines.length; i++) {
+      var ln = lines[i];
+      if (fenceRe.test(ln)) {
+        out.push((commentPrefix + ln).replace(/\s+$/, ''));
+        inside = !inside;
+      } else if (inside) {
+        out.push(ln);
+      } else {
+        out.push(ln.trim().length ? (commentPrefix + ln) : commentPrefix.trim());
+      }
+    }
+    return out.join('\n');
+  }
+
   /* ----------------------- Clipboard & download ----------------------- */
   async function copyText(text){
     try { if (navigator.clipboard && navigator.clipboard.writeText) { await navigator.clipboard.writeText(text); return true; } } catch(_){}
@@ -592,6 +616,13 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
     } catch (e) {
       errorLog('pipeline/storage:error', e);
       storageScan = { ok: false, meta: { error: e && (e.message || e) } };
+    }
+    if (storageScan && storageScan.code) {
+      try {
+        storageScan.code = commentOutsideFences(storageScan.code, { commentPrefix: '# ' });
+      } catch (e) {
+        errorLog('pipeline/storage:commentError', e);
+      }
     }
     debugLog('pipeline/storage', { ok: storageScan && storageScan.ok, codeLength: storageScan && storageScan.code ? storageScan.code.length : 0, key: storageScan && storageScan.meta && storageScan.meta.key });
 
