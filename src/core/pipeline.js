@@ -340,7 +340,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
           debugLog('pipeline/glossary:skip', { term: term, htmlLength: html && html.length });
           continue;
         }
-        var mdObj = await HTML2MD.convert(html, { inlineImages: getCfg().md && getCfg().md.INLINE_IMAGES });
+        var mdObj = await HTML2MD.convert(html, { inlineImages: getCfg().md && getCfg().md.INLINE_IMAGES, wrapWithHeader: false });
         var glossaryNS = NS.md && (NS.md.glossary_markdown || NS.md.glossary);
         var label = term.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'').replace(/^-+|-+$/g,'');
         if (glossaryNS && typeof glossaryNS.toLabel === 'function') {
