@@ -586,10 +586,11 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
             varNames: varNames,
             defaultBlob: defaultBlob,
             customBlob: capturedBlob,
-            subs: rows,
+            rows: rows,
             detailsById: detailsById,
             monacoEditor: monacoEditor,
-            storageScan: storageScan
+            storageScan: storageScan,
+            slug: (q && q.titleSlug) || slug
           });
           debugLog('pipeline/notebook:built', { filename: nbOut && nbOut.filename, cells: nbOut && nbOut.notebook && Array.isArray(nbOut.notebook.cells) ? nbOut.notebook.cells.length : null });
         } catch (e) {
