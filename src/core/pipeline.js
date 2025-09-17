@@ -376,8 +376,15 @@
 
   function bootstrap(){
     // Guard for SPA re-injections (also see bootstrap userscript)
-    if (root.__LC_MD_INSTALLED__) return;
-    try { root.__LC_MD_INSTALLED__ = true; } catch(_) { window.__LC_MD_INSTALLED__ = true; }
+    var PIPELINE_FLAG = '__LC_MD_PIPELINE_READY__';
+    if (root[PIPELINE_FLAG]) return;
+    try {
+      root[PIPELINE_FLAG] = true;
+      if (!root.__LC_MD_INSTALLED__) root.__LC_MD_INSTALLED__ = true;
+    } catch(_) {
+      try { window[PIPELINE_FLAG] = true; } catch(__) {}
+      try { if (!window.__LC_MD_INSTALLED__) window.__LC_MD_INSTALLED__ = true; } catch(__) {}
+    }
 
     // Optional: read ?lcmd= query overrides
     try { cfgAPI && cfgAPI.loadFromQuery && cfgAPI.loadFromQuery(); } catch(_){}
