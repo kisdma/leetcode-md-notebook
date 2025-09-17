@@ -3,7 +3,7 @@
  * - Handles CSRF, multiple /graphql endpoints, JSON parsing, and schema drift.
  * - Provides convenience functions used by the pipeline.
  *
- * Public API (LCMD.lc_api.graphql):
+ * Public API (LCMD.lc.gql):
  *   gqlCall(query, variables?, opts?)
  *   fetchQuestion(titleSlug) -> { ...question, statsObj, similar, meta }
  *   fetchHints(titleSlug) -> string[]
@@ -16,8 +16,10 @@
   'use strict';
   if (!NS || !NS.defineNS) return;
 
-  var API_ROOT = NS.defineNS('lc_api');
-  if (API_ROOT.graphql && API_ROOT.graphql.__ready__) return;
+  var LC = NS.defineNS('lc');
+  var LEGACY = NS.defineNS('lc_api');
+  var existing = LC.gql || LC.graphql || LEGACY.graphql;
+  if (existing && existing.__ready__) return;
 
   var root;
   try { root = (typeof unsafeWindow !== 'undefined' && unsafeWindow) || window; } catch (_) { root = window; }
@@ -315,7 +317,7 @@
   }
 
   /* ----------------------------- export ----------------------------- */
-  API_ROOT.graphql = {
+  var API = {
     __ready__: true,
     gqlCall: gqlCall,
     fetchQuestion: fetchQuestion,
@@ -324,6 +326,10 @@
     fetchSubmissionDetails: fetchSubmissionDetails,
     fetchBeatsViaCheck: fetchBeatsViaCheck,
     mergeDetail: mergeDetail,
+    queryQuestion: fetchQuestion,
+    queryHints: fetchHints,
+    querySubmissionList: fetchSubmissionsForSlug,
+    querySubmissionDetails: fetchSubmissionDetails,
     // utils (optional export)
     _utils: {
       getGraphQLEnds: getGraphQLEnds,
@@ -332,5 +338,9 @@
       coerceNum: coerceNum
     }
   };
+
+  LC.gql = API;
+  LC.graphql = API; // alias
+  LEGACY.graphql = API; // legacy namespace
 
 })(window.LCMD);

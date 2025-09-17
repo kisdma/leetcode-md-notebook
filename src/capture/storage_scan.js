@@ -2,7 +2,7 @@
  * Heuristic scan of window.localStorage for plausible LeetCode editor code.
  *
  * Public API:
- *   LCMD.capture.storageScan.scan(slug, question?, opts?) -> { ok, code, meta }
+ *   LCMD.capture.storage_scan.scan(slug, question?, opts?) -> { ok, code, meta }
  *     - slug: problem titleSlug (preferred for key matching)
  *     - question: minimal LC question object { meta, codeSnippets, titleSlug, ... } (optional)
  *     - opts: { maxStrings?, maxDepth? }
@@ -17,7 +17,8 @@
   if (!NS || !NS.defineNS) return;
 
   var CAP = NS.defineNS('capture');
-  if (CAP.storageScan && CAP.storageScan.__ready__) return;
+  var existing = CAP.storage_scan || CAP.storageScan;
+  if (existing && existing.__ready__) return;
 
   var log    = (NS.core && NS.core.log) || { debug:function(){}, info:function(){}, warn:function(){}, error:function(){} };
   var cfgAPI = NS.core && NS.core.configAPI;
@@ -248,9 +249,12 @@
   }
 
   /* ---------------- public API ---------------- */
-  CAP.storageScan = {
+  var API = {
     __ready__: true,
     scan: scan
   };
+
+  CAP.storage_scan = API;
+  CAP.storageScan = API; // legacy alias
 
 })(window.LCMD);

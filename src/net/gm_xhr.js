@@ -6,7 +6,7 @@
  *  - Fallback to window.fetch when GM XHR is unavailable or same-origin is fine
  *  - Convenience helpers for common patterns (JSON, ArrayBuffer, DataURL images)
  *
- * Public API (LCMD.net.gm):
+ * Public API (LCMD.net.gm_xhr):
  *   isAvailable() -> boolean
  *   absoluteUrl(u, base?) -> string
  *   getCookie(name) -> string
@@ -46,7 +46,8 @@
   if (!NS || !NS.defineNS) return;
 
   var NET = NS.defineNS('net');
-  if (NET.gm && NET.gm.__ready__) return;
+  var existing = NET.gm_xhr || NET.gm;
+  if (existing && existing.__ready__) return;
 
   var log = (NS.core && NS.core.log) || { debug:function(){}, info:function(){}, warn:function(){}, error:function(){} };
 
@@ -296,7 +297,7 @@
   }
 
   /* -------------------------------- export -------------------------------- */
-  NET.gm = {
+  var API = {
     __ready__: true,
     isAvailable: isAvailable,
     absoluteUrl: absoluteUrl,
@@ -307,5 +308,8 @@
     json: json,
     fetchAsDataURL: fetchAsDataURL
   };
+
+  NET.gm_xhr = API;
+  NET.gm = API; // legacy alias
 
 })(window.LCMD);

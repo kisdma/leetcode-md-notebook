@@ -1,10 +1,19 @@
-/* src/util/index.js */
+/* src/util/index.js
+ * Utility namespace aggregator / compatibility helpers.
+ *
+ * Public API (LCMD.util.index):
+ *   ensure(path) -> namespace object | null
+ *   has(key) -> boolean
+ *   list() -> string[] (immediate keys under LCMD.util)
+ *   get(key) -> any
+ */
 (function(NS){
   'use strict';
   if (!NS || !NS.defineNS) return;
 
-  // Ensure namespaces
   var UTIL = NS.defineNS('util');
+  var existing = UTIL.index;
+  if (existing && existing.__ready__) return;
 
   // Attach submodules (assumes individual files self-register under LCMD.util.*)
   // Nothing to do here if each module already sets UTIL.something = {__ready__:true,...}
@@ -41,5 +50,18 @@
 
   // string: ensure the file is named string.js (not strings.js)
   // (If you previously had strings.js, keep a re-export stub there or rename the file.)
+
+  var API = {
+    __ready__: true,
+    ensure: function(path){
+      if (!path || typeof path !== 'string') return null;
+      try { return NS.defineNS(path); } catch (_) { return null; }
+    },
+    has: function(key){ return !!(key && Object.prototype.hasOwnProperty.call(UTIL, key)); },
+    list: function(){ try { return Object.keys(UTIL); } catch (_) { return []; } },
+    get: function(key){ return key ? UTIL[key] : undefined; }
+  };
+
+  UTIL.index = API;
 
 })(window.LCMD);

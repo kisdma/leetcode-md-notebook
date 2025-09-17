@@ -1,4 +1,4 @@
-/* nb/notebook_build.js
+/* src/nb/notebook_build.js
  * Jupyter Notebook builder.
  *
  * Responsibilities:
@@ -10,7 +10,7 @@
  *      5) localStorage heuristic cell
  *      6) One cell per submission (source + run_all_cases if Python)
  *
- * Public API (LCMD.nb.notebook):
+ * Public API (LCMD.nb.notebook_build):
  *   skeleton() -> nb json
  *   mdCell(md) -> notebook markdown cell
  *   pyCell(code) -> notebook code cell
@@ -35,7 +35,8 @@
   if (!NS || !NS.defineNS) return;
 
   var NBNS = NS.defineNS('nb');
-  if (NBNS.notebook && NBNS.notebook.__ready__) return;
+  var existing = NBNS.notebook_build || NBNS.notebook;
+  if (existing && existing.__ready__) return;
 
   var log    = (NS.core && NS.core.log) || { debug:function(){}, info:function(){}, warn:function(){}, error:function(){} };
   var cfgAPI = NS.core && NS.core.configAPI;
@@ -471,7 +472,7 @@
   }
 
   /* ------------------------------ export ------------------------------ */
-  NBNS.notebook = {
+  var API = {
     __ready__: true,
     skeleton: skeleton,
     mdCell: mdCell,
@@ -484,5 +485,8 @@
     submissionCell: submissionCell,
     build: build
   };
+
+  NBNS.notebook_build = API;
+  NBNS.notebook = API; // legacy alias
 
 })(window.LCMD);

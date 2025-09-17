@@ -4,9 +4,9 @@
  * - Frame listener responds to postMessage {type:'lc-monaco-request', id}
  *   with {type:'lc-monaco-dump', id, data:{code,langId,__info:{...}}}.
  * - Public API:
- *     LCMD.capture.monacoFrames.request(timeoutMs=1400)
+ *     LCMD.capture.monaco_frames.request(timeoutMs=1400)
  *       -> Promise<{code,langId,__info}>
- *     LCMD.capture.monacoFrames.injectAll()  // optional pre-injection
+ *     LCMD.capture.monaco_frames.injectAll()  // optional pre-injection
  * - Idempotent and tolerant of CSP/edge cases; no-ops on cross-origin iframes.
  */
 (function (NS) {
@@ -14,7 +14,8 @@
   if (!NS || !NS.defineNS) return;
 
   var CAP = NS.defineNS('capture');
-  if (CAP.monacoFrames && CAP.monacoFrames.__ready__) return;
+  var existing = CAP.monaco_frames || CAP.monacoFrames;
+  if (existing && existing.__ready__) return;
 
   var root;
   try { root = (typeof unsafeWindow !== 'undefined' && unsafeWindow) || window; } catch (_) { root = window; }
@@ -227,6 +228,7 @@
     }
   };
 
-  CAP.monacoFrames = API;
+  CAP.monaco_frames = API;
+  CAP.monacoFrames = API; // legacy alias
 
 })(window.LCMD);

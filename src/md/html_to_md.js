@@ -5,7 +5,7 @@
  *   - Tables, lists, headings, links, code blocks
  *   - Glossary anchor injection (skip fenced code)
  *
- * Public API (LCMD.md.html):
+ * Public API (LCMD.md.html_to_md):
  *   convert(html, opts?) -> Promise<{ md, imgStats, footnotes }>
  *
  * Options (opts):
@@ -25,7 +25,8 @@
   if (!NS || !NS.defineNS) return;
 
   var MD = NS.defineNS('md');
-  if (MD.html && MD.html.__ready__) return;
+  var existing = MD.html_to_md || MD.html;
+  if (existing && existing.__ready__) return;
 
   var log    = (NS.core && NS.core.log) || { debug:function(){}, info:function(){}, warn:function(){}, error:function(){} };
   var cfgAPI = NS.core && NS.core.configAPI;
@@ -401,7 +402,7 @@
   }
 
   /* --------------------- export --------------------- */
-  MD.html = {
+  var API = {
     __ready__: true,
     convert: convert,
     // Optional utility hooks for advanced use/testing
@@ -411,5 +412,8 @@
       buildGlossarySection: buildGlossarySection
     }
   };
+
+  MD.html_to_md = API;
+  MD.html = API; // legacy alias
 
 })(window.LCMD);

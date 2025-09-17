@@ -2,7 +2,7 @@
  * Helpers for converting captured glossary popover HTML into Markdown,
  * producing stable anchor labels, and injecting term links into prose.
  *
- * Public API (LCMD.md.glossary):
+ * Public API (LCMD.md.glossary_markdown):
  *   toLabel(term)                  -> string            // slugified base label (no uniqueness)
  *   uniqueLabel(base, used)        -> string            // ensure uniqueness against a Set/map
  *   sanitize(html)                 -> string            // strip interactive UI chrome before convert
@@ -20,7 +20,8 @@
   if (!NS || !NS.defineNS) return;
 
   var MD = NS.defineNS('md');
-  if (MD.glossary && MD.glossary.__ready__) return;
+  var existing = MD.glossary_markdown || MD.glossary;
+  if (existing && existing.__ready__) return;
 
   /* ------------------------- utilities ------------------------- */
   function nonEmpty(s){ return typeof s === 'string' && s.trim().length > 0; }
@@ -287,7 +288,7 @@
   }
 
   /* --------------------------- export --------------------------- */
-  MD.glossary = {
+  var API = {
     __ready__: true,
     toLabel: toLabel,
     uniqueLabel: uniqueLabel,
@@ -296,5 +297,8 @@
     buildSection: buildSection,
     injectAnchors: injectAnchors
   };
+
+  MD.glossary_markdown = API;
+  MD.glossary = API; // legacy alias
 
 })(window.LCMD);

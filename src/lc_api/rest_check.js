@@ -6,7 +6,7 @@
  *  - Fill in runtime/memory and "beats %" when GraphQL omits them.
  *  - Poll until the judge finishes (bounded retries with backoff).
  *
- * Public API (LCMD.lc_api.rest_check):
+ * Public API (LCMD.lc.rest):
  *   fetchCheckRaw(id, opts?) -> Promise<{ ok, json?, status?, error? }>
  *   parseCheck(json) -> { runtimeBeats?, memoryBeats?, runtimeStr?, memoryStr?, runtimeMs?, memoryMB?, state?, raw? }
  *   pollCheck(id, opts?) -> Promise<{ source:'rest', runtimeBeats?, memoryBeats?, runtimeStr?, memoryStr?, runtimeMs?, memoryMB?, state? }>
@@ -23,8 +23,10 @@
   'use strict';
   if (!NS || !NS.defineNS) return;
 
-  var API_ROOT = NS.defineNS('lc_api');
-  if (API_ROOT.rest_check && API_ROOT.rest_check.__ready__) return;
+  var LC = NS.defineNS('lc');
+  var LEGACY = NS.defineNS('lc_api');
+  var existing = LC.rest || LEGACY.rest_check;
+  if (existing && existing.__ready__) return;
 
   var root;
   try { root = (typeof unsafeWindow !== 'undefined' && unsafeWindow) || window; } catch (_) { root = window; }
@@ -185,11 +187,16 @@
   }
 
   /* ---------------- export ---------------- */
-  API_ROOT.rest_check = {
+  var API = {
     __ready__: true,
     fetchCheckRaw: fetchCheckRaw,
     parseCheck: parseCheck,
-    pollCheck: pollCheck
+    pollCheck: pollCheck,
+    checkSubmission: function(id, opts){ return pollCheck(id, opts); }
   };
+
+  LC.rest = API;
+  LC.rest_check = API; // alias
+  LEGACY.rest_check = API;
 
 })(window.LCMD);

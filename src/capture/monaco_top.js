@@ -4,8 +4,8 @@
  *   and responds with 'lc-monaco-dump-top' { code, langId, __info }.
  * - Heuristics: pick focused editor → visible editor → first → largest model.
  * - Public API:
- *     LCMD.capture.monacoTop.install()
- *     LCMD.capture.monacoTop.request(timeoutMs=1200) -> Promise<{code,langId,__info}>
+ *     LCMD.capture.monaco_top.install()
+ *     LCMD.capture.monaco_top.request(timeoutMs=1200) -> Promise<{code,langId,__info}>
  * - Idempotent and CSP-tolerant (logs a warning if injection seems blocked).
  */
 (function (NS) {
@@ -13,7 +13,8 @@
   if (!NS || !NS.defineNS) return;
 
   var CAP = NS.defineNS('capture');
-  if (CAP.monacoTop && CAP.monacoTop.__ready__) return;
+  var existing = CAP.monaco_top || CAP.monacoTop;
+  if (existing && existing.__ready__) return;
 
   var root;
   try { root = (typeof unsafeWindow !== 'undefined' && unsafeWindow) || window; } catch (_) { root = window; }
@@ -192,6 +193,7 @@
     }
   };
 
-  CAP.monacoTop = API;
+  CAP.monaco_top = API;
+  CAP.monacoTop = API; // legacy alias
 
 })(window.LCMD);

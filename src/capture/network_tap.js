@@ -3,7 +3,7 @@
  * - Idempotent: safe to @require multiple times.
  * - Injects a small script into the page to monkeypatch window.fetch (page context).
  * - Emits window 'lc-input-v2' CustomEvent { customInput, typedCode, lang }.
- * - Public API: LCMD.capture.networkTap.install(cb)
+ * - Public API: LCMD.capture.network_tap.install(cb)
  *   - cb(detailObject) is called for every capture event.
  * - Optional: XHR fallback (disabled by default; see ENABLE_XHR_FALLBACK).
  */
@@ -12,7 +12,8 @@
   if (!NS || !NS.defineNS) return;
 
   var CAP = NS.defineNS('capture');
-  if (CAP.networkTap && CAP.networkTap.__ready__) return;
+  var existing = CAP.network_tap || CAP.networkTap;
+  if (existing && existing.__ready__) return;
 
   var root;
   try { root = (typeof unsafeWindow !== 'undefined' && unsafeWindow) || window; } catch (_) { root = window; }
@@ -199,6 +200,7 @@
     }
   };
 
-  CAP.networkTap = API;
+  CAP.network_tap = API;
+  CAP.networkTap = API; // legacy alias
 
 })(window.LCMD);

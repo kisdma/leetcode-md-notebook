@@ -6,7 +6,7 @@
  *  - Visibility-aware queries
  *  - Useful finders for LC description area, glossary popups, and language label
  *
- * Public API (LCMD.dom.sel):
+ * Public API (LCMD.dom.selectors):
  *   qs(sel, root?)                         -> Element|null
  *   qsa(sel, root?)                        -> Element[]              // array, not NodeList
  *   firstVisible(sel, root?)               -> Element|null
@@ -24,7 +24,8 @@
   if (!NS || !NS.defineNS) return;
 
   var DOM = NS.defineNS('dom');
-  if (DOM.sel && DOM.sel.__ready__) return;
+  var existing = DOM.selectors || DOM.sel;
+  if (existing && existing.__ready__) return;
 
   var ready = (DOM && DOM.ready) || {};
   var log   = (NS.core && NS.core.log) || { debug:function(){}, info:function(){}, warn:function(){}, error:function(){} };
@@ -165,7 +166,7 @@
   }
 
   /* -------------------------------- export -------------------------------- */
-  DOM.sel = {
+  var API = {
     __ready__: true,
     // primitives
     qs: qs,
@@ -180,5 +181,8 @@
     // misc
     visibleLanguageLabel: visibleLanguageLabel
   };
+
+  DOM.selectors = API;
+  DOM.sel = API; // legacy alias
 
 })(window.LCMD);

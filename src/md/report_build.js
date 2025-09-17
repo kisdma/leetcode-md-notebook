@@ -6,7 +6,7 @@
  *  - Keep rendering decisions centralized (headings, tables, code fences).
  *  - Remain pure & deterministic (no DOM access, no network).
  *
- * Public API (LCMD.md.report):
+ * Public API (LCMD.md.report_build):
  *   sanitizeCodeForMarkdown(code) -> string
  *   fenceFromLabelOrId(labelOrId) -> string
  *   normalizeFenceFromLabel(label) -> string
@@ -32,7 +32,8 @@
   if (!NS || !NS.defineNS) return;
 
   var MD = NS.defineNS('md');
-  if (MD.report && MD.report.__ready__) return;
+  var existing = MD.report_build || MD.report;
+  if (existing && existing.__ready__) return;
 
   var log    = (NS.core && NS.core.log) || { debug:function(){}, info:function(){}, warn:function(){}, error:function(){} };
   var cfgAPI = NS.core && NS.core.configAPI;
@@ -311,7 +312,7 @@
   }
 
   /* --------------------------- export --------------------------- */
-  MD.report = {
+  var API = {
     __ready__: true,
     // utils
     sanitizeCodeForMarkdown: sanitizeCodeForMarkdown,
@@ -330,5 +331,8 @@
     // full
     buildFullReport: buildFullReport
   };
+
+  MD.report_build = API;
+  MD.report = API; // legacy alias
 
 })(window.LCMD);
