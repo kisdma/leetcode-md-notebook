@@ -235,8 +235,17 @@
   /* --------------------- conversion core --------------------- */
   async function convert(html, opts){
     var cfg = getCfg();
+    var cfgInlineRaw = null;
+    if (cfg && cfg.md) {
+      if (Object.prototype.hasOwnProperty.call(cfg.md, 'inlineImages')) {
+        cfgInlineRaw = cfg.md.inlineImages;
+      } else if (Object.prototype.hasOwnProperty.call(cfg.md, 'INLINE_IMAGES')) {
+        cfgInlineRaw = cfg.md.INLINE_IMAGES;
+      }
+    }
+    var inlineDefault = (cfgInlineRaw == null) ? true : !!cfgInlineRaw;
     var O = Object.assign({
-      inlineImages: !!(cfg.md && cfg.md.inlineImages),
+      inlineImages: inlineDefault,
       imageTimeoutMs: (cfg.md && cfg.md.imageTimeoutMs) || 20000,
       pairs: null,
       baseUrl: location.href,
