@@ -459,7 +459,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
       try {
         var det = await callMethod(GQL, ['fetchSubmissionDetails', 'querySubmissionDetails'], [idNum], 'GraphQL fetchSubmissionDetails not available');
         det = det || {};
-        detailsById[s.id] = { code: det.code || '', lang: det.lang || s.lang || '' };
+        detailsById[idNum] = { code: det.code || '', lang: det.lang || s.lang || '' };
         var detRuntimeMs = toNumberOrNull(det.runtimeMs); if (detRuntimeMs != null) row.runtimeMs = detRuntimeMs;
         var detRuntimeBeats = toNumberOrNull(det.runtimeBeats); if (detRuntimeBeats != null) row.runtimeBeats = detRuntimeBeats;
         var detMemoryMB = toNumberOrNull(det.memoryMB); if (detMemoryMB != null) row.memoryMB = detMemoryMB;
@@ -467,7 +467,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
         if (det.runtimeStr != null) row.runtimeStr = det.runtimeStr;
         if (det.memoryStr != null) row.memoryStr = det.memoryStr;
         if (det.note) row.note = det.note;
-        debugLog('pipeline/submission:detail', { id: s.id, codeLength: (det.code || '').length, lang: detailsById[s.id].lang, runtimeMs: row.runtimeMs, memoryMB: row.memoryMB });
+        debugLog('pipeline/submission:detail', { id: idNum, codeLength: (det.code || '').length, lang: (detailsById[idNum] && detailsById[idNum].lang) || '', runtimeMs: row.runtimeMs, memoryMB: row.memoryMB });
       } catch (e) {
         errorLog('pipeline/submission:detailError', e);
       }
