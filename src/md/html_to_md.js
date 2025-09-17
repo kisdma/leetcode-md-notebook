@@ -244,14 +244,20 @@
       }
     }
     var inlineDefault = (cfgInlineRaw == null) ? true : !!cfgInlineRaw;
-    var O = Object.assign({
+    var defaults = {
       inlineImages: inlineDefault,
       imageTimeoutMs: (cfg.md && cfg.md.imageTimeoutMs) || 20000,
       pairs: null,
       baseUrl: location.href,
       wrapWithHeader: true,
       header: '## Description'
-    }, opts || {});
+    };
+    var O = Object.assign({}, defaults, opts || {});
+    if (O.inlineImages == null) {
+      O.inlineImages = inlineDefault;
+    } else {
+      O.inlineImages = !!O.inlineImages;
+    }
 
     if (!nonEmpty(html)) {
       var emptyMd = O.wrapWithHeader ? (O.header + '\n\n') : '';
