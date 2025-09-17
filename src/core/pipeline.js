@@ -442,6 +442,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
       var s = subs[i] || {};
       var idNum = Number(s.id);
       var row = {
+        idx: rows.length + 1,
         id: idNum,
         statusDisplay: s.statusDisplay || '',
         timestamp: s.timestamp || null,
@@ -454,6 +455,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
         memoryStr: s.memoryStr || '',
         note: s.note || ''
       };
+      if (!detailsById[idNum]) detailsById[idNum] = { code: '', lang: row.lang || '' };
       rows.push(row);
 
       try {
@@ -467,6 +469,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
         if (det.runtimeStr != null) row.runtimeStr = det.runtimeStr;
         if (det.memoryStr != null) row.memoryStr = det.memoryStr;
         if (det.note) row.note = det.note;
+        if (detailsById[idNum] && detailsById[idNum].lang) row.lang = detailsById[idNum].lang;
         debugLog('pipeline/submission:detail', { id: idNum, codeLength: (det.code || '').length, lang: (detailsById[idNum] && detailsById[idNum].lang) || '', runtimeMs: row.runtimeMs, memoryMB: row.memoryMB });
       } catch (e) {
         errorLog('pipeline/submission:detailError', e);
