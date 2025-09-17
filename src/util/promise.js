@@ -1,7 +1,7 @@
 /* src/util/promise.js
  * Promise helpers: deferred, withTimeout, retry with backoff.
  *
- * Public API (LCMD.util.p):
+ * Public API (LCMD.util.promise):
  *   deferred() -> {promise, resolve, reject}
  *   withTimeout(promise, ms, onTimeout?) -> Promise
  *   retry(fn, {tries=3, delay=200, factor=1.5}) -> Promise
@@ -10,7 +10,8 @@
   'use strict';
   if (!NS || !NS.defineNS) return;
   var UTIL = NS.defineNS('util');
-  if (UTIL.p && UTIL.p.__ready__) return;
+  var existing = UTIL.promise || UTIL.p;
+  if (existing && existing.__ready__) return;
 
   function deferred(){
     var resolve, reject;
@@ -44,5 +45,8 @@
     throw lastErr;
   }
 
-  UTIL.p = { __ready__: true, deferred: deferred, withTimeout: withTimeout, retry: retry };
+  var API = { __ready__: true, deferred: deferred, withTimeout: withTimeout, retry: retry };
+
+  UTIL.promise = API;
+  UTIL.p = API; // legacy alias
 })(window.LCMD);

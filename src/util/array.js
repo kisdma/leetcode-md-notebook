@@ -1,7 +1,7 @@
 /* src/util/array.js
  * Array helpers: uniqueness, chunking, flattening, zipping.
  *
- * Public API (LCMD.util.arr):
+ * Public API (LCMD.util.array):
  *   uniqueBy(array, keyFn) -> any[]
  *   flatten(arr) -> any[]
  *   chunk(arr, size) -> any[][]
@@ -11,7 +11,8 @@
   'use strict';
   if (!NS || !NS.defineNS) return;
   var UTIL = NS.defineNS('util');
-  if (UTIL.arr && UTIL.arr.__ready__) return;
+  var existing = UTIL.array || UTIL.arr;
+  if (existing && existing.__ready__) return;
 
   function uniqueBy(arr, keyFn){
     var out = [], seen = Object.create(null);
@@ -38,5 +39,8 @@
     return out;
   }
 
-  UTIL.arr = { __ready__: true, uniqueBy: uniqueBy, flatten: flatten, chunk: chunk, zip: zip };
+  var API = { __ready__: true, uniqueBy: uniqueBy, flatten: flatten, chunk: chunk, zip: zip };
+
+  UTIL.array = API;
+  UTIL.arr = API; // legacy alias
 })(window.LCMD);

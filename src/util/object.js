@@ -1,7 +1,7 @@
 /* src/util/object.js
  * Object helpers: pick/omit, deep get/set, shallow merge.
  *
- * Public API (LCMD.util.obj):
+ * Public API (LCMD.util.object):
  *   pick(obj, keys[]) -> object
  *   omit(obj, keys[]) -> object
  *   merge(target, ...sources) -> target
@@ -12,7 +12,8 @@
   'use strict';
   if (!NS || !NS.defineNS) return;
   var UTIL = NS.defineNS('util');
-  if (UTIL.obj && UTIL.obj.__ready__) return;
+  var existing = UTIL.object || UTIL.obj;
+  if (existing && existing.__ready__) return;
 
   function pick(o, keys){
     var out = {};
@@ -57,5 +58,8 @@
     return obj;
   }
 
-  UTIL.obj = { __ready__: true, pick: pick, omit: omit, merge: merge, get: get, set: set };
+  var API = { __ready__: true, pick: pick, omit: omit, merge: merge, get: get, set: set };
+
+  UTIL.object = API;
+  UTIL.obj = API; // legacy alias
 })(window.LCMD);

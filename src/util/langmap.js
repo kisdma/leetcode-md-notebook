@@ -1,7 +1,7 @@
 /* src/util/langmap.js
  * Language label <-> fence mapping and heuristics.
  *
- * Public API (LCMD.util.lang):
+ * Public API (LCMD.util.langmap):
  *   labelFromMonacoId(monacoId, question?, explicitLabel?) -> string
  *   fenceFromLabelOrId(labelOrId) -> 'python'|'cpp'|...|'text'
  *   normalizeFence(fence, label) -> string
@@ -12,7 +12,8 @@
   'use strict';
   if (!NS || !NS.defineNS) return;
   var UTIL = NS.defineNS('util');
-  if (UTIL.lang && UTIL.lang.__ready__) return;
+  var existing = UTIL.langmap || UTIL.lang;
+  if (existing && existing.__ready__) return;
 
   var KNOWN = {
     python:{label:'Python',fence:'python',aliases:['python3','py']},
@@ -64,7 +65,7 @@
   }
   function normalizeFenceFromLabel(label){ return normalizeFence(fenceFromLabelOrId(label), label); }
 
-  UTIL.lang = {
+  var API = {
     __ready__: true,
     KNOWN: KNOWN,
     labelFromMonacoId: labelFromMonacoId,
@@ -72,4 +73,7 @@
     normalizeFence: normalizeFence,
     normalizeFenceFromLabel: normalizeFenceFromLabel
   };
+
+  UTIL.langmap = API;
+  UTIL.lang = API; // legacy alias
 })(window.LCMD);
