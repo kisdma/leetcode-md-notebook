@@ -159,7 +159,7 @@
     var lang = inferLangLabel(code);
     if (lang === 'Python3' || lang === 'C++' || lang === 'Java') { score += 1; reasons.push('commonLC_lang'); }
 
-    return { score: score, reasons: reasons, matchSlug: !!matchSlug, lang: lang, length: len };
+    return { score: score, reasons: reasons, matchSlug: !!matchSlug, lang: lang, length: len, forProblem: !!forProblem };
   }
 
   /* ---------------- scan core ---------------- */
@@ -218,7 +218,8 @@
           reasons: sc.reasons,
           matchSlug: sc.matchSlug,
           lang: sc.lang,
-          length: sc.length
+          length: sc.length,
+          seemsForThis: sc.forProblem
         };
         if (sc.matchSlug) bucketSlug.push(cand); else bucketOther.push(cand);
       }
@@ -229,9 +230,13 @@
     var chosen = (bucketSlug.sort(byScoreLen)[0]) || (bucketOther.sort(byScoreLen)[0]) || null;
     if (!chosen) return { ok:false, code:'', meta:{ error:'no plausible code strings found' } };
 
+    if (chosen.matchSlug && !chosen.seemsForThis) {
+      return { ok:false, code:'', meta:{ error:'slug key found but code looks unrelated', key: chosen.key, matchSlug: true, reasons: chosen.reasons, score: chosen.score, length: chosen.length } };
+    }
+
     // Guard against unrelated short/weak finds
     if (chosen.score < 3 || (chosen.length || 0) < 80) {
-      return { ok:false, code:'', meta:{ error:'weak candidate', key: chosen.key, score: chosen.score, len: chosen.length } };
+      return { ok:false, code:'', meta:{ error:'weak candidate', key: chosen.key, score: chosen.score, len: chosen.length, matchSlug: !!chosen.matchSlug, seemsForThis: !!chosen.seemsForThis } };
     }
 
     return {
@@ -243,7 +248,8 @@
         langGuess: chosen.lang,
         score: chosen.score,
         reasons: chosen.reasons,
-        length: chosen.length
+        length: chosen.length,
+        seemsForThis: !!chosen.seemsForThis
       }
     };
   }
