@@ -329,7 +329,8 @@
     monacoSection: monacoSection,
     storageSection: storageSection,
     // full
-    buildFullReport: buildFullReport
+    buildFullReport: buildFullReport,
+    build: buildFullReport // legacy name
   };
 
   MD.report_build = API;
