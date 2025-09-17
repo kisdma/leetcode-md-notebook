@@ -227,8 +227,11 @@
 
     function byScoreLen(a,b){ if (b.score !== a.score) return b.score - a.score; return (b.length||0) - (a.length||0); }
 
-    var chosen = (bucketSlug.sort(byScoreLen)[0]) || (bucketOther.sort(byScoreLen)[0]) || null;
-    if (!chosen) return { ok:false, code:'', meta:{ error:'no plausible code strings found' } };
+    var chosen = bucketSlug.sort(byScoreLen)[0] || null;
+    if (!chosen) {
+      var fallback = bucketOther.sort(byScoreLen)[0] || null;
+      return { ok:false, code:'', meta:{ error:'no localStorage code tied to this slug', fallbackKey: fallback && fallback.key, fallbackScore: fallback && fallback.score, fallbackLen: fallback && fallback.length } };
+    }
 
     if (chosen.matchSlug && !chosen.seemsForThis) {
       return { ok:false, code:'', meta:{ error:'slug key found but code looks unrelated', key: chosen.key, matchSlug: true, reasons: chosen.reasons, score: chosen.score, length: chosen.length } };
