@@ -212,14 +212,22 @@
   function buildGlossarySection(pairs) {
     if (!pairs || !pairs.length) return '';
     var md = '## Glossary\n\n';
-    for (var i=0;i<pairs.length;i++){
+    for (var i = 0; i < pairs.length; i++){
       var p = pairs[i];
       if (!p || !p.label) continue;
       var term = (p.term || '').trim();
       var body = (p.md || '').trim();
-      md += '<a id="glossary-'+p.label+'"></a>\n';
-      md += (term ? ('**'+term+'**  \n') : '');
-      md += (body ? body.replace(/\n/g, '  \n') : '') + '\n\n';
+      md += '<a id="glossary-' + p.label + '"></a>\n';
+      if (term) md += '> **' + term + '**\n';
+      if (body){
+        var lines = body.split('\n');
+        for (var j = 0; j < lines.length; j++){
+          md += '> ' + lines[j] + '\n';
+        }
+      } else {
+        md += '> (definition unavailable)\n';
+      }
+      md += '\n';
     }
     return md;
   }

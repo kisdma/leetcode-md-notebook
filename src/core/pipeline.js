@@ -629,7 +629,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
     if (!HTML2MD || typeof HTML2MD.convert !== 'function') {
       throw new Error('HTML2MD.convert not available');
     }
-    var descConv = await HTML2MD.convert(q && q.content || '', { inlineImages: cfg.md && cfg.md.INLINE_IMAGES, pairs: pairs });
+    var descConv = await HTML2MD.convert(q && q.content || '', { inlineImages: cfg.md && cfg.md.INLINE_IMAGES, pairs: pairs, wrapWithHeader: false });
     debugLog('pipeline/description', { mdLength: descConv && descConv.md ? descConv.md.length : 0, images: descConv && descConv.imgStats });
 
     var exA = q && q.exampleTestcases || '';
