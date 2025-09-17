@@ -316,6 +316,7 @@ Config knobs (defaults shown; feel free to tune):
 
 * **Export:** `buildNotebook(q, solved, descMd, hints, varNames, defaultBlob, capturedBlob, subsRows, detailsById, monacoEditor, storageScan)` → `{ notebook, filename }`
 * First MD cell includes summary/report, harness/ref/editor/localStorage/submission cells follow.
+* Harness inputs come from `combineUniqueTestcases`: merge default and captured blobs, dedupe by normalized testcase fields before building the runner cell.
 
 ---
 
@@ -325,7 +326,10 @@ Config knobs (defaults shown; feel free to tune):
 
 * Injects fixed bar with buttons: **Copy Report**, **Save .ipynb**, **Copy Log**.
 * Toast component (fixed bottom-right).
-* Capture badge: indicates custom input capture state for current slug.
+* Capture badge: indicates custom input capture state for current slug and updates on `locationchange`.
+* Watches the DOM with a `MutationObserver` so the bar is reinserted if LeetCode re-renders or removes it.
+* Clipboard handling tries `navigator.clipboard.writeText`, falls back to `GM_setClipboard`, then a hidden textarea shim for legacy browsers.
+* Notebook downloads attempt `GM_download`, fall back to a `data:` anchor click, then finally a Blob/ObjectURL download.
 
 #### `src/ui/popup_glossary.js`
 
