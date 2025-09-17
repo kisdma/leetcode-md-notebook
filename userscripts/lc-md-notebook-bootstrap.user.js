@@ -184,6 +184,32 @@
     };
   }
 
+  function logPresenceMatrix(label){
+    var matrix = presenceMatrix();
+    var open = false;
+    try {
+      if (typeof console.groupCollapsed === 'function') {
+        console.groupCollapsed(label);
+        open = true;
+      }
+      if (typeof console.table === 'function') {
+        console.table(matrix);
+      } else {
+        console.log(label, matrix);
+      }
+    } catch (e) {
+      try { info('presence matrix', matrix, e && (e.message || e)); } catch(_) {}
+    } finally {
+      try { if (open && typeof console.groupEnd === 'function') console.groupEnd(); } catch(_) {}
+    }
+  }
+
+  function logPresenceInitial(label){
+    if (_loggedPresenceOnce) return;
+    _loggedPresenceOnce = true;
+    logPresenceMatrix(label);
+  }
+
   // -------- Robust pipeline resolver --------
   function resolvePipeline() {
     var NS = (window.LCMD || {});
@@ -231,6 +257,7 @@
     var NS = window.LCMD || {};
     var p = resolvePipeline();
     if (p) {
+      logPresenceInitial('[LCMD/BOOT] presence matrix (pipeline ready)');
       info('pipeline found; booting…', {
         hasCore: !!NS.core,
         pipePath: (NS.core && NS.core.pipeline) ? 'LCMD.core.pipeline' : (NS.pipeline ? 'LCMD.pipeline' : '(unknown)')
@@ -243,14 +270,7 @@
     TRIES++;
 
     // one-time presence matrix on first attempt
-    if (!_loggedPresenceOnce) {
-      _loggedPresenceOnce = true;
-      try {
-        console.groupCollapsed('[LCMD/BOOT] presence matrix @ attempt 1');
-        console.table(presenceMatrix());
-        console.groupEnd();
-      } catch(_) { info('presence', presenceMatrix()); }
-    }
+    logPresenceInitial('[LCMD/BOOT] presence matrix @ attempt ' + TRIES);
 
     var missing = missingTopNamespaces();
     warn('pipeline not ready; retrying', { attempt: (TRIES + '/' + MAX_TRIES), docReady: document.readyState, LCMD_present: !!window.LCMD, missing_ns: missing });
@@ -266,12 +286,14 @@
         hint: 'Check Tampermonkey Logs for syntax errors in @require files (e.g., ESM export/import) and ensure modules extend LCMD.* without reassigning it.'
       });
       try {
-        console.groupCollapsed('[LCMD/BOOT] final presence matrix');
-        console.table(presenceMatrix());
-        console.groupEnd();
-        console.groupCollapsed('[LCMD/BOOT] final LCMD tree');
-        console.dir(snapshot(2));
-        console.groupEnd();
+        logPresenceMatrix('[LCMD/BOOT] final presence matrix');
+        if (typeof console.groupCollapsed === 'function') {
+          console.groupCollapsed('[LCMD/BOOT] final LCMD tree');
+          console.dir(snapshot(2));
+          console.groupEnd();
+        } else {
+          console.log('[LCMD/BOOT] final LCMD tree', snapshot(2));
+        }
       } catch(_) {}
       return;
     }

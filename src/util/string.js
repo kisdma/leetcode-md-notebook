@@ -1,7 +1,7 @@
-/* src/util/strings.js
+/* src/util/string.js
  * String helpers: emptiness, clipping, slugging, escaping, and MD-safe utilities.
  *
- * Public API (LCMD.util.str):
+ * Public API (LCMD.util.string):
  *   nonEmpty(s) -> boolean
  *   clip(s, n=120) -> string
  *   slugify(s) -> string
@@ -17,7 +17,8 @@
   'use strict';
   if (!NS || !NS.defineNS) return;
   var UTIL = NS.defineNS('util');
-  if (UTIL.str && UTIL.str.__ready__) return;
+  var existing = UTIL.string || UTIL.str;
+  if (existing && existing.__ready__) return;
 
   function nonEmpty(s){ return typeof s === 'string' && s.trim().length > 0; }
 
@@ -94,7 +95,7 @@
       .trim();
   }
 
-  UTIL.str = {
+  var API = {
     __ready__: true,
     nonEmpty: nonEmpty,
     clip: clip,
@@ -107,4 +108,7 @@
     indent: indent,
     stripMarkdown: stripMarkdown
   };
+
+  UTIL.string = API;
+  UTIL.str = API; // legacy alias for older modules
 })(window.LCMD);
