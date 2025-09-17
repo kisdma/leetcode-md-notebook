@@ -208,6 +208,52 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
   function getTypedCode(slug){ var o=loadStore()[slug]||{}; return o.typed || null; }
 
   /* ----------------------- Monaco helpers ----------------------- */
+  function sleep(ms){
+    return new Promise(function(resolve){ setTimeout(resolve, ms || 0); });
+  }
+
+  async function waitForMonacoOnPage(ms){
+    var cfg = getCfg();
+    var timeout = (typeof ms === 'number' && ms >= 0) ? ms : ((cfg.editor && cfg.editor.WAIT_MONACO_MS) || 9000);
+    var start = Date.now();
+    var lastLen = 0;
+    while (Date.now() - start < timeout){
+      var monaco = null;
+      try { monaco = root && root.monaco; } catch (_) { monaco = null; }
+      if (monaco && monaco.editor){
+        var editors = [];
+        var models = [];
+        try { editors = monaco.editor.getEditors ? monaco.editor.getEditors() : []; } catch (_){}
+        try { models  = monaco.editor.getModels  ? monaco.editor.getModels()  : []; } catch (_){}
+        var anyVisible = false;
+        for (var i = 0; i < editors.length; i++){
+          try {
+            var node = editors[i] && editors[i].getDomNode && editors[i].getDomNode();
+            if (node){
+              var rect = node.getBoundingClientRect();
+              if (rect.width > 0 && rect.height > 0){ anyVisible = true; break; }
+            }
+          } catch (_){}
+        }
+        var totalLen = 0;
+        for (var j = 0; j < models.length; j++){
+          try { totalLen += (models[j].getValue ? models[j].getValue().length : 0); } catch (_){}
+        }
+        if ((editors.length && anyVisible) || models.length){
+          if (totalLen > 0 && (lastLen === 0 || totalLen !== lastLen)){
+            debugLog('pipeline/monaco:waitReady', { editors: editors.length, models: models.length, totalLen: totalLen });
+            return true;
+          }
+          lastLen = totalLen;
+        }
+      }
+      await sleep(120);
+    }
+    debugLog('pipeline/monaco:waitTimeout', { timeoutMs: timeout });
+    return false;
+  }
+
+
   function resolveLabel(monacoId, fallbackLabel){
     if (nonEmpty(fallbackLabel)) return fallbackLabel.trim();
     if (!nonEmpty(monacoId)) return 'Text';
@@ -227,6 +273,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
 
   async function grabMonacoCodeAndLang(){
     try { MonacoTop.install && MonacoTop.install(); } catch(_){}
+    await waitForMonacoOnPage();
     var t = getCfg().TRACE || {};
     var dumpTop = await (MonacoTop.request ? MonacoTop.request(1200) : Promise.resolve({ code:'', langId:'' }));
     debugLog('pipeline/monaco:topRaw', { hasCode: nonEmpty(dumpTop.code), langId: dumpTop && dumpTop.langId });
@@ -248,6 +295,28 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
       var resultFrame = { code: dumpFr.code, label: label2, fence: fenceFromLabel(label2), meta: { source:'monaco-frame' } };
       debugLog('pipeline/monaco:frameSelected', { codeLength: resultFrame.code.length, label: resultFrame.label });
       return resultFrame;
+    }
+    var monacoUnsafe = null;
+    try { monacoUnsafe = (typeof unsafeWindow !== 'undefined' && unsafeWindow && unsafeWindow.monaco) || null; } catch (_){}
+    var monacoRoot = monacoUnsafe || (root && root.monaco);
+    if (monacoRoot && monacoRoot.editor && typeof monacoRoot.editor.getModels === 'function') {
+      var models = monacoRoot.editor.getModels();
+      var best = null;
+      for (var m = 0; m < models.length; m++){
+        try {
+          var val = models[m].getValue ? models[m].getValue() : '';
+          if (nonEmpty(val) && (!best || val.length > best.val.length)) {
+            best = { val: val, lang: models[m].getLanguageId ? models[m].getLanguageId() : '' };
+          }
+        } catch (_){}
+      }
+      if (best && nonEmpty(best.val)) {
+        var visUnsafe = visibleLangLabelFn();
+        var labelUnsafe = resolveLabel(best.lang || '', visUnsafe || '');
+        var fenceUnsafe = fenceFromLabel(labelUnsafe);
+        debugLog('pipeline/monaco:unsafeWindow', { label: labelUnsafe, len: best.val.length });
+        return { code: best.val, label: labelUnsafe, fence: fenceUnsafe, meta: { source: 'monaco-unsafeWindow' } };
+      }
     }
     debugLog('pipeline/monaco:none', { reason: 'no editors detected' });
     return { code:'', label:'Text', fence:'text', meta: { source:'monaco-none' } };
