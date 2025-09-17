@@ -24,23 +24,168 @@
   function getCfg() { return cfgAPI ? cfgAPI.get() : (NS.core && NS.core.config) || {}; }
 
   // Modules (guard each since users may iterate file-by-file)
-  var DomReady   = NS.dom && NS.dom.ready || { onReady: function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); }, patchHistory: function(){} };
-  var Selectors  = NS.dom && NS.dom.selectors || { descriptionRoot: function(){ return document.body; }, visibleLangLabel: function(){ return null; }, findGlossaryButtons: function(){ return []; } };
-  var Toolbar    = NS.ui  && NS.ui.toolbar   || { ensure: function(){}, updateCaptureBadge: function(){} };
+  var DomNS      = NS.dom || {};
+  var DomReady   = DomNS.ready || { onReady: function (fn) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fn, { once: true }); else fn(); }, patchHistory: function(){} };
+  var Selectors  = DomNS.selectors || DomNS.sel || (function () {
+    function stubVisible(){ return null; }
+    function stubGlossary(){ return []; }
+    return {
+      descriptionRoot: function(){ return document.body; },
+      visibleLanguageLabel: stubVisible,
+      visibleLangLabel: stubVisible,
+      glossaryButtonsInDescription: stubGlossary,
+      findGlossaryButtons: stubGlossary
+    };
+  })();
+  var visibleLangLabelFn = Selectors.visibleLanguageLabel || Selectors.visibleLangLabel || function(){ return null; };
+  var glossaryButtonsFn = Selectors.glossaryButtonsInDescription || Selectors.findGlossaryButtons || function(){ return []; };
 
-  var NetTap     = NS.capture && NS.capture.networkTap   || { install: function(){} };
-  var MonacoTop  = NS.capture && NS.capture.monacoTop     || { install: function(){}, request: function(){ return Promise.resolve({ code:'', langId:'', __info:{} }); } };
-  var MonacoFr   = NS.capture && NS.capture.monacoFrames  || { request: function(){ return Promise.resolve({ code:'', langId:'', __info:{} }); } };
-  var StorageScan= NS.capture && NS.capture.storageScan   || { scan: function(){ return { ok:false, code:'', meta:{} }; } };
+  var ToolbarNS  = NS.ui || {};
+  var Toolbar    = ToolbarNS.toolbar || { ensure: function(){}, updateCaptureBadge: function(){} };
 
-  var GQL        = NS.lc_api && NS.lc_api.gql           || { fetchQuestion:async function(){return {};}, fetchHints:async function(){return [];}, fetchSubmissions:async function(){return []}, fetchSubmissionDetails:async function(){return { code:'', lang:''}; } };
-  var RESTCheck  = NS.lc_api && NS.lc_api.restCheck     || { fetch: async function(){return {}; } };
+  var CaptureNS  = NS.capture || {};
+  var NetTap     = CaptureNS.network_tap   || CaptureNS.networkTap   || { install: function(){} };
+  var MonacoTop  = CaptureNS.monaco_top    || CaptureNS.monacoTop    || { install: function(){}, request: function(){ return Promise.resolve({ code:'', langId:'', __info:{} }); } };
+  var MonacoFr   = CaptureNS.monaco_frames || CaptureNS.monacoFrames || { request: function(){ return Promise.resolve({ code:'', langId:'', __info:{} }); } };
+  var StorageScan= CaptureNS.storage_scan  || CaptureNS.storageScan  || { scan: function(){ return { ok:false, code:'', meta:{} }; } };
 
-  var HTML2MD    = NS.md && NS.md.html_to_md            || { convert: async function(html){ var div=document.createElement('div'); div.innerHTML=html||''; return { md: (div.textContent||'').trim()+'\n', imgStats: {total:0,embedded:0,failed:0,details:[]}, footnotes:[] }; } };
-  var ReportMD   = NS.md && NS.md.report_build          || { build: function(parts){ return [parts.headerMd||'',parts.descMd||'',parts.hintsMd||'',parts.testcasesMd||'',parts.subsTableMd||'',parts.codeSectionsMd||''].join('\n'); } };
+  var GQLNS      = (NS.lc && (NS.lc.gql || NS.lc.graphql)) || (NS.lc_api && NS.lc_api.graphql) || null;
+  var GQL        = GQLNS || {};
+  var RESTNS     = (NS.lc && (NS.lc.rest || NS.lc.rest_check)) || (NS.lc_api && NS.lc_api.rest_check) || null;
+  var RESTCheck  = RESTNS || {};
 
-  var NBCells    = NS.nb && NS.nb.cells                 || { mdCell: function(md){return {cell_type:'markdown',metadata:{},source:md+'\n'};}, pyCell: function(code){return {cell_type:'code',metadata:{},execution_count:null,outputs:[],source:code+'\n'};}, harness:function(){return {cell_type:'code',metadata:{},execution_count:null,outputs:[],source:'# harness\n'};}, reference:function(){return {cell_type:'code',metadata:{},execution_count:null,outputs:[],source:'# reference\n'};}, monacoCell:function(){return {cell_type:'code',metadata:{},execution_count:null,outputs:[],source:'# monaco\n'};}, storageCell:function(){return {cell_type:'code',metadata:{},execution_count:null,outputs:[],source:'# storage\n'};} };
-  var NBBuild    = NS.nb && NS.nb.notebook_build        || { build: function(){ return { notebook:{cells:[],metadata:{kernelspec:{display_name:'Python 3',language:'python',name:'python3'},language_info:{name:'python',version:'3.x'}},nbformat:4,nbformat_minor:5}, filename:'LC-unknown.ipynb' }; } };
+  var MDNS       = NS.md || {};
+  var HTML2MD    = MDNS.html_to_md   || MDNS.html   || { convert: async function(html){ var div=document.createElement('div'); div.innerHTML=html||''; return { md: (div.textContent||'').trim()+'\n', imgStats: {total:0,embedded:0,failed:0,details:[]}, footnotes:[] }; } };
+  var ReportMD   = MDNS.report_build || MDNS.report || {
+    buildFullReport: function(parts){ return [parts.headerMd||'',parts.descMd||'',parts.hintsMd||'',parts.testcasesMd||'',parts.subsTableMd||'',parts.codeSectionsMd||''].join('\n'); },
+    build: function(parts){ return this.buildFullReport(parts); }
+  };
+
+  var NBNS       = NS.nb || {};
+  var NBCells    = NBNS.cells || { mdCell: function(md){return {cell_type:'markdown',metadata:{},source:md+'\n'};}, pyCell: function(code){return {cell_type:'code',metadata:{},execution_count:null,outputs:[],source:code+'\n'};}, harness:function(){return {cell_type:'code',metadata:{},execution_count:null,outputs:[],source:'# harness\n'};}, reference:function(){return {cell_type:'code',metadata:{},execution_count:null,outputs:[],source:'# reference\n'};}, monacoCell:function(){return {cell_type:'code',metadata:{},execution_count:null,outputs:[],source:'# monaco\n'};}, storageCell:function(){return {cell_type:'code',metadata:{},execution_count:null,outputs:[],source:'# storage\n'};} };
+  var NBBuild    = NBNS.notebook_build || NBNS.notebook || { build: function(){ return { notebook:{cells:[],metadata:{kernelspec:{display_name:'Python 3',language:'python',name:'python3'},language_info:{name:'python',version:'3.x'}},nbformat:4,nbformat_minor:5}, filename:'LC-unknown.ipynb' }; } };
+
+  function safeStringify(obj) {
+    try { return JSON.stringify(obj); } catch (_) { return String(obj); }
+  }
+
+  function toNumberOrNull(v) {
+    var num = Number(v);
+    return isNaN(num) ? null : num;
+  }
+
+  function extractVarNamesFromMeta(q) {
+    var names = [];
+    var params = q && q.meta && q.meta.params;
+    if (Array.isArray(params)) {
+      for (var i = 0; i < params.length; i++) {
+        var p = params[i] || {};
+        var nm = p.name || p.parameter || p.paramName || p.param || p.varName || p.var || '';
+        if (nonEmpty(nm) && names.indexOf(nm) === -1) names.push(String(nm));
+      }
+    }
+    return names;
+  }
+
+  function extractVarNamesFromDescriptionText(q) {
+    try {
+      var div = document.createElement('div');
+      div.innerHTML = (q && q.content) || '';
+      var text = div.textContent || '';
+      var lines = text.split(/\r?\n/);
+      var names = [];
+      for (var i = 0; i < lines.length; i++) {
+        var line = (lines[i] || '').trim();
+        if (!/^input\s*:/i.test(line)) continue;
+        var rhs = line.replace(/^input\s*:/i, '').trim();
+        var tokens = rhs.split(/,/g);
+        for (var j = 0; j < tokens.length; j++) {
+          var tok = tokens[j];
+          var m = tok && tok.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+          if (m && names.indexOf(m[1]) === -1) names.push(m[1]);
+        }
+      }
+      return names;
+    } catch (_) { return []; }
+  }
+
+function buildDefaultVarNamesGuess(blob) {
+    var lines = String(blob || '').replace(/\r\n/g, '\n').split('\n');
+    if (lines.length >= 2 && /^-?\d+$/.test(lines[0].trim())) {
+      var T = parseInt(lines[0], 10);
+      var rem = lines.length - 1;
+      for (var V = 1; V <= Math.min(6, rem); V++) {
+        if (rem % V === 0 && rem / V === T) {
+          var guess = [];
+          for (var k = 0; k < V; k++) guess.push('var' + (k + 1));
+          return guess;
+        }
+      }
+    }
+    return ['var1'];
+  }
+
+  
+function getVariableNames(q, capturedBlob, defaultBlob) {
+    var fromMeta = extractVarNamesFromMeta(q);
+    if (fromMeta.length) return fromMeta;
+    var fromDesc = extractVarNamesFromDescriptionText(q);
+    if (fromDesc.length) return fromDesc;
+    var refBlob = capturedBlob || defaultBlob || '';
+    return buildDefaultVarNamesGuess(refBlob);
+  }
+
+  function debugLog(label, data) {
+    if (log && typeof log.debug === 'function') {
+      try { log.debug(label, safeStringify(data)); return; } catch (_) {}
+      try { log.debug(label); } catch (_) {}
+    } else if (log && typeof log.info === 'function') {
+      try { log.info(label, safeStringify(data)); } catch (_) { log.info(label); }
+    }
+  }
+
+  function infoLog(label, data) {
+    if (log && typeof log.info === 'function') {
+      try { log.info(label, safeStringify(data)); } catch (_) { log.info(label); }
+    }
+  }
+
+  function errorLog(label, err) {
+    var msg = err && (err.stack || err.message || err);
+    if (log && typeof log.error === 'function') {
+      try { log.error(label, msg); } catch (_) { log.error(label); }
+    } else if (log && typeof log.warn === 'function') {
+      try { log.warn(label, msg); } catch (_) { log.warn(label); }
+    }
+  }
+
+  function getMethod(obj, names) {
+    if (!obj) return null;
+    for (var i = 0; i < names.length; i++) {
+      var fn = obj[names[i]];
+      if (typeof fn === 'function') return fn.bind(obj);
+    }
+    return null;
+  }
+
+  function callMethod(obj, names, args, errLabel) {
+    var fn = getMethod(obj, names);
+    if (!fn) {
+      return Promise.reject(new Error(errLabel || ('Missing method: ' + names.join('/'))));
+    }
+    try {
+      var result = fn.apply(obj, args || []);
+      return (result && typeof result.then === 'function') ? result : Promise.resolve(result);
+    } catch (e) {
+      return Promise.reject(e);
+    }
+  }
+
+  if (ReportMD && ReportMD.buildFullReport && !ReportMD.build) {
+    try { ReportMD.build = ReportMD.buildFullReport.bind(ReportMD); } catch (_) { ReportMD.build = ReportMD.buildFullReport; }
+  } else if (ReportMD && ReportMD.build && !ReportMD.buildFullReport) {
+    try { ReportMD.buildFullReport = ReportMD.build.bind(ReportMD); } catch (_) { ReportMD.buildFullReport = ReportMD.build; }
+  }
 
   /* ----------------------- Utilities ----------------------- */
   function nonEmpty(s){ return typeof s === 'string' && s.trim().length>0; }
@@ -84,27 +229,35 @@
     try { MonacoTop.install && MonacoTop.install(); } catch(_){}
     var t = getCfg().TRACE || {};
     var dumpTop = await (MonacoTop.request ? MonacoTop.request(1200) : Promise.resolve({ code:'', langId:'' }));
+    debugLog('pipeline/monaco:topRaw', { hasCode: nonEmpty(dumpTop.code), langId: dumpTop && dumpTop.langId });
     if (t.MONACO) log.debug('monaco/top', JSON.stringify(dumpTop.__info || {}));
     if (nonEmpty(dumpTop.code)) {
-      var vis = Selectors.visibleLangLabel && Selectors.visibleLangLabel();
+      var vis = visibleLangLabelFn();
       var label = resolveLabel(dumpTop.langId || '', vis || '');
-      return { code: dumpTop.code, label: label, fence: fenceFromLabel(label), meta: { source:'monaco-top' } };
+      var resultTop = { code: dumpTop.code, label: label, fence: fenceFromLabel(label), meta: { source:'monaco-top' } };
+      debugLog('pipeline/monaco:topSelected', { codeLength: resultTop.code.length, label: resultTop.label });
+      return resultTop;
     }
     // Fallback to frames
     var dumpFr = await (MonacoFr.request ? MonacoFr.request(1400) : Promise.resolve({ code:'', langId:'' }));
+    debugLog('pipeline/monaco:frameRaw', { hasCode: nonEmpty(dumpFr.code), langId: dumpFr && dumpFr.langId });
     if (t.IFRAMES) log.debug('monaco/frame', JSON.stringify(dumpFr.__info || {}));
     if (nonEmpty(dumpFr.code)) {
-      var vis2 = Selectors.visibleLangLabel && Selectors.visibleLangLabel();
+      var vis2 = visibleLangLabelFn();
       var label2 = resolveLabel(dumpFr.langId || '', vis2 || '');
-      return { code: dumpFr.code, label: label2, fence: fenceFromLabel(label2), meta: { source:'monaco-frame' } };
+      var resultFrame = { code: dumpFr.code, label: label2, fence: fenceFromLabel(label2), meta: { source:'monaco-frame' } };
+      debugLog('pipeline/monaco:frameSelected', { codeLength: resultFrame.code.length, label: resultFrame.label });
+      return resultFrame;
     }
+    debugLog('pipeline/monaco:none', { reason: 'no editors detected' });
     return { code:'', label:'Text', fence:'text', meta: { source:'monaco-none' } };
   }
 
   /* ----------------------- Glossary quick capture (lightweight) ----------------------- */
   async function captureGlossaryPairs(limit){
     var rootDesc = Selectors.descriptionRoot ? Selectors.descriptionRoot() : null;
-    var btns = Selectors.findGlossaryButtons ? Selectors.findGlossaryButtons(rootDesc) : [];
+    var btns = glossaryButtonsFn(rootDesc);
+    debugLog('pipeline/glossary:buttons', { count: (btns && btns.length) || 0, limit: limit });
     if (!btns || !btns.length) return [];
     var max = Math.min(limit || 20, btns.length);
     var pairs = [];
@@ -114,14 +267,27 @@
         var term = (btn.textContent || '').trim();
         var got = await (NS.ui && NS.ui.popup_glossary && NS.ui.popup_glossary.clickOpenAndGetHTML ? NS.ui.popup_glossary.clickOpenAndGetHTML(btn) : Promise.resolve({ html:'' }));
         var html = got.html || '';
-        if (!nonEmpty(term) || !nonEmpty(html)) continue;
-        // Convert popup HTML -> MD snippet (use HTML2MD for simplicity)
+        if (!nonEmpty(term) || !nonEmpty(html)) {
+          debugLog('pipeline/glossary:skip', { term: term, htmlLength: html && html.length });
+          continue;
+        }
         var mdObj = await HTML2MD.convert(html, { inlineImages: getCfg().md && getCfg().md.INLINE_IMAGES });
-        // basic label
-        var label = term.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'').replace(/^-+|-+$/g,'') || ('term-' + (i+1));
+        var glossaryNS = NS.md && (NS.md.glossary_markdown || NS.md.glossary);
+        var label = term.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'').replace(/^-+|-+$/g,'');
+        if (glossaryNS && typeof glossaryNS.toLabel === 'function') {
+          try { label = glossaryNS.toLabel(term); } catch (_) {}
+          if (glossaryNS && typeof glossaryNS.uniqueLabel === 'function') {
+            try { label = glossaryNS.uniqueLabel(label, {}); } catch (_) {}
+          }
+        }
+        if (!label) label = 'term-' + (i+1);
         pairs.push({ term: term, label: label, md: (mdObj.md || '').trim() });
-      }catch(e){ log.debug('glossary/capture error', e && (e.message || e)); }
+        debugLog('pipeline/glossary:pair', { term: term, label: label, mdLength: (mdObj.md || '').length });
+      }catch(e){
+        errorLog('pipeline/glossary:error', e);
+      }
     }
+    debugLog('pipeline/glossary:complete', { captured: pairs.length });
     return pairs;
   }
 
@@ -205,119 +371,235 @@
   }
 
   /* ----------------------- Pipeline ----------------------- */
-  async function runPipeline(opts){
+  async function runPipeline(opts) {
     opts = opts || {};
     var produceReport = !!opts.produceReport;
-    var wantNotebook  = !!opts.wantNotebook;
+    var wantNotebook = !!opts.wantNotebook;
 
     var slug = getSlugFromPath();
     if (!slug) throw new Error('No problem slug in URL.');
 
+    debugLog('pipeline/options', { slug: slug, produceReport: produceReport, wantNotebook: wantNotebook });
     log.info('pipeline/start', nowISO(), 'slug=', slug);
 
-    // Start network calls
-    var qP     = GQL.fetchQuestion(slug);
-    var subsP  = GQL.fetchSubmissions(slug, { limit: (getCfg().limits && getCfg().limits.MAX_SUBMISSIONS) || 60, pageSize: (getCfg().limits && getCfg().limits.PAGE_SIZE) || 20 });
-    var hintsP = GQL.fetchHints(slug).catch(function(){ return []; });
+    var cfg = getCfg();
+    var limits = cfg.limits || {};
+    var subsOpts = {
+      limit: limits.MAX_SUBMISSIONS || 60,
+      pageSize: limits.PAGE_SIZE || 20
+    };
 
-    // Fast glossary capture (non-blocking for long)
-    var pairs = await captureGlossaryPairs((getCfg().GLOSSARY_CFG && getCfg().GLOSSARY_CFG.MAX_TERMS) || 20);
+    var qPromise = callMethod(GQL, ['fetchQuestion', 'queryQuestion'], [slug], 'GraphQL fetchQuestion not available')
+      .then(function (data) {
+        data = data || {};
+        debugLog('pipeline/question:ok', { slug: slug, title: data.title || data.titleSlug, hasContent: !!(data && data.content) });
+        return data;
+      })
+      .catch(function (err) {
+        errorLog('pipeline/question:error', err);
+        throw err;
+      });
 
-    var res   = await Promise.all([qP, subsP, hintsP]);
-    var q     = res[0] || {};
-    var subs  = Array.isArray(res[1]) ? res[1] : [];
+    var subsPromise = callMethod(GQL, ['fetchSubmissions', 'fetchSubmissionsForSlug', 'querySubmissionList'], [slug, subsOpts], 'GraphQL fetchSubmissions not available')
+      .then(function (list) {
+        var arr = Array.isArray(list) ? list : ((list && list.submissions) || []);
+        debugLog('pipeline/submissions:ok', { count: arr.length, limit: subsOpts.limit, pageSize: subsOpts.pageSize });
+        return arr;
+      })
+      .catch(function (err) {
+        errorLog('pipeline/submissions:error', err);
+        return [];
+      });
+
+    var hintsPromise = callMethod(GQL, ['fetchHints', 'queryHints'], [slug], 'GraphQL fetchHints not available')
+      .then(function (list) {
+        var arr = Array.isArray(list) ? list : [];
+        debugLog('pipeline/hints:ok', { count: arr.length });
+        return arr;
+      })
+      .catch(function (err) {
+        errorLog('pipeline/hints:error', err);
+        return [];
+      });
+
+    var pairs = [];
+    try {
+      pairs = await captureGlossaryPairs((cfg.GLOSSARY_CFG && cfg.GLOSSARY_CFG.MAX_TERMS) || 20);
+    } catch (e) {
+      errorLog('pipeline/glossary:failure', e);
+      pairs = [];
+    }
+
+    var res = await Promise.all([qPromise, subsPromise, hintsPromise]);
+    var q = res[0] || {};
+    var subs = Array.isArray(res[1]) ? res[1] : [];
     var hints = Array.isArray(res[2]) ? res[2] : [];
+    debugLog('pipeline/data:summary', { submissions: subs.length, hints: hints.length, titleSlug: q && q.titleSlug });
 
-    // Detail fetch minimal (accepted first if needed)
     var rows = [];
     var detailsById = {};
-    for (var i=0;i<subs.length;i++){
-      var s = subs[i];
-      rows.push({
-        id: Number(s.id),
+    for (var i = 0; i < subs.length; i++) {
+      var s = subs[i] || {};
+      var idNum = Number(s.id);
+      var row = {
+        id: idNum,
         statusDisplay: s.statusDisplay || '',
         timestamp: s.timestamp || null,
-        lang: s.lang || ''
-      });
-      // lightweight detail
-      try{
-        var det = await GQL.fetchSubmissionDetails(Number(s.id));
+        lang: s.lang || '',
+        runtimeMs: toNumberOrNull(s.runtimeMs),
+        runtimeBeats: toNumberOrNull(s.runtimeBeats),
+        memoryMB: toNumberOrNull(s.memoryMB),
+        memoryBeats: toNumberOrNull(s.memoryBeats),
+        runtimeStr: s.runtimeStr || '',
+        memoryStr: s.memoryStr || '',
+        note: s.note || ''
+      };
+      rows.push(row);
+
+      try {
+        var det = await callMethod(GQL, ['fetchSubmissionDetails', 'querySubmissionDetails'], [idNum], 'GraphQL fetchSubmissionDetails not available');
+        det = det || {};
         detailsById[s.id] = { code: det.code || '', lang: det.lang || s.lang || '' };
-      }catch(e){}
+        var detRuntimeMs = toNumberOrNull(det.runtimeMs); if (detRuntimeMs != null) row.runtimeMs = detRuntimeMs;
+        var detRuntimeBeats = toNumberOrNull(det.runtimeBeats); if (detRuntimeBeats != null) row.runtimeBeats = detRuntimeBeats;
+        var detMemoryMB = toNumberOrNull(det.memoryMB); if (detMemoryMB != null) row.memoryMB = detMemoryMB;
+        var detMemoryBeats = toNumberOrNull(det.memoryBeats); if (detMemoryBeats != null) row.memoryBeats = detMemoryBeats;
+        if (det.runtimeStr != null) row.runtimeStr = det.runtimeStr;
+        if (det.memoryStr != null) row.memoryStr = det.memoryStr;
+        if (det.note) row.note = det.note;
+        debugLog('pipeline/submission:detail', { id: s.id, codeLength: (det.code || '').length, lang: detailsById[s.id].lang, runtimeMs: row.runtimeMs, memoryMB: row.memoryMB });
+      } catch (e) {
+        errorLog('pipeline/submission:detailError', e);
+      }
+
+      var needsRest = /accepted/i.test(row.statusDisplay) &&
+        (row.runtimeBeats == null || row.memoryBeats == null || row.runtimeMs == null || row.memoryMB == null);
+      if (needsRest) {
+        try {
+          var rest = null;
+          var pollFn = getMethod(RESTCheck, ['pollCheck']);
+          if (pollFn) {
+            rest = await pollFn(idNum, { tries: 7 });
+          } else {
+            var fetchRawFn = getMethod(RESTCheck, ['fetchCheckRaw']);
+            var parseFn = getMethod(RESTCheck, ['parseCheck']);
+            if (fetchRawFn && parseFn) {
+              var raw = await fetchRawFn(idNum, { timeoutMs: (cfg.api && cfg.api.timeoutMs) || 12000 });
+              if (raw && raw.json) {
+                rest = parseFn(raw.json);
+              }
+            }
+          }
+          if (rest) {
+            var restRuntimeMs = toNumberOrNull(rest.runtimeMs); if (restRuntimeMs != null) row.runtimeMs = restRuntimeMs;
+            var restRuntimeBeats = toNumberOrNull(rest.runtimeBeats); if (restRuntimeBeats != null) row.runtimeBeats = restRuntimeBeats;
+            var restMemoryMB = toNumberOrNull(rest.memoryMB); if (restMemoryMB != null) row.memoryMB = restMemoryMB;
+            var restMemoryBeats = toNumberOrNull(rest.memoryBeats); if (restMemoryBeats != null) row.memoryBeats = restMemoryBeats;
+            if (rest.runtimeStr) row.runtimeStr = rest.runtimeStr;
+            if (rest.memoryStr) row.memoryStr = rest.memoryStr;
+            debugLog('pipeline/submission:rest', { id: s.id, runtimeMs: row.runtimeMs, memoryMB: row.memoryMB });
+          }
+        } catch (e) {
+          errorLog('pipeline/submission:restError', e);
+        }
+      }
     }
 
-    // Monaco + storage
-    var monacoEditor = await grabMonacoCodeAndLang();
-    var storageScan  = StorageScan.scan(slug, q);
+    var monacoEditor;
+    try {
+      monacoEditor = await grabMonacoCodeAndLang();
+      debugLog('pipeline/monaco:selected', { source: monacoEditor && monacoEditor.meta && monacoEditor.meta.source, codeLength: monacoEditor && monacoEditor.code ? monacoEditor.code.length : 0, label: monacoEditor && monacoEditor.label });
+    } catch (e) {
+      errorLog('pipeline/monaco:error', e);
+      monacoEditor = { code: '', label: 'Text', fence: 'text', meta: { source: 'error' } };
+    }
 
-    // Convert description
-    var descConv = await HTML2MD.convert(q && q.content || '', { inlineImages: getCfg().md && getCfg().md.INLINE_IMAGES, pairs: pairs });
-    var descMd = nonEmpty(descConv.md) ? ('## Description\n\n' + descConv.md + '\n') : '';
+    var storageScan;
+    try {
+      storageScan = (StorageScan && typeof StorageScan.scan === 'function') ? StorageScan.scan(slug, q) : { ok: false, meta: { error: 'storageScan missing' } };
+    } catch (e) {
+      errorLog('pipeline/storage:error', e);
+      storageScan = { ok: false, meta: { error: e && (e.message || e) } };
+    }
+    debugLog('pipeline/storage', { ok: storageScan && storageScan.ok, codeLength: storageScan && storageScan.code ? storageScan.code.length : 0, key: storageScan && storageScan.meta && storageScan.meta.key });
 
-    // Testcases (default/custom)
+    if (!HTML2MD || typeof HTML2MD.convert !== 'function') {
+      throw new Error('HTML2MD.convert not available');
+    }
+    var descConv = await HTML2MD.convert(q && q.content || '', { inlineImages: cfg.md && cfg.md.INLINE_IMAGES, pairs: pairs });
+    debugLog('pipeline/description', { mdLength: descConv && descConv.md ? descConv.md.length : 0, images: descConv && descConv.imgStats });
+
     var exA = q && q.exampleTestcases || '';
     var exB = q && q.sampleTestCase || '';
-    var defaultBlob = [exA, exB].filter(nonEmpty).join('\n').trim();
+    var defaultBlob = [exA, exB].filter(nonEmpty).join('
+').trim();
     var capturedBlob = getCustomInput(slug);
-    var testcasesMd = '## Testcases\n\n';
-    testcasesMd += '### Default (from problem)\n\n```\n' + (defaultBlob || '(none)') + '\n```\n\n';
-    if (nonEmpty(capturedBlob)) testcasesMd += '### Custom (captured via NetworkTap)\n\n```\n' + capturedBlob + '\n```\n\n';
-    else testcasesMd += '### Custom (captured via NetworkTap)\n\n*(none captured yet — click **Run** on LC then retry)*\n\n';
+    debugLog('pipeline/testcases', { defaultLength: defaultBlob.length, customLength: capturedBlob.length });
 
-    // Submissions table
-    var subsTableMd = buildSubmissionsTable(q && q.titleSlug || slug, rows);
+    var varNames = getVariableNames(q, capturedBlob, defaultBlob);
+    debugLog('pipeline/varNames', { count: varNames.length, names: varNames });
 
-    // Per-submission code
-    var parts = ['## Submission Code\n'];
-    for (var j=0;j<rows.length;j++){
-      var r = rows[j];
-      var d = detailsById[r.id] || {};
-      var langLabel = d.lang || r.lang || 'Text';
-      var fence = fenceFromLabel(langLabel);
-      var timeStr = toLocalStringFromEpochSec(r.timestamp);
-      var header = '### Submission ' + r.id + ' — ' + (r.statusDisplay||'') + ' — ' + langLabel + (timeStr ? (' — ' + timeStr) : '');
-      var codeRaw = nonEmpty(d.code) ? d.code : '';
-      var safe = sanitizeCodeForMarkdown(codeRaw);
-      parts.push(header + (nonEmpty(codeRaw) ? ('\n\n```' + fence + '\n' + safe + '\n```\n') : '\n\n*(no code available)*\n'));
-    }
-    var codeSectionsMd = parts.join('\n');
-
-    // Hints
-    var hintsMd = '';
-    if (Array.isArray(hints) && hints.length) {
-      var lines = hints.map(function(h,i){ return ' ' + (i+1) + '. ' + String(h).replace(/\s+/g,' ').trim(); }).join('\n');
-      hintsMd = '## Hints\n\n' + lines + '\n';
-    }
-
-    // Header
     var solved = rows.some(function(r){ return /accepted/i.test(r.statusDisplay); });
-    var headerMd = buildProblemHeader(q, solved);
 
-    var reportMd = ReportMD.build({
-      headerMd: headerMd,
-      descMd: descMd,
-      hintsMd: hintsMd,
-      testcasesMd: testcasesMd,
-      subsTableMd: subsTableMd,
-      codeSectionsMd: codeSectionsMd
-    });
+    var reportBuilder = getMethod(ReportMD, ['buildFullReport', 'build']);
+    if (!reportBuilder) {
+      throw new Error('Report builder unavailable');
+    }
+    var reportPayload = {
+      question: q,
+      solved: solved,
+      descMd: descConv && descConv.md ? descConv.md : '',
+      imgStats: descConv && descConv.imgStats ? descConv.imgStats : null,
+      hints: hints,
+      varNames: varNames,
+      defaultBlob: defaultBlob,
+      customBlob: capturedBlob,
+      monacoEditor: monacoEditor,
+      storageScan: storageScan,
+      rows: rows,
+      detailsById: detailsById,
+      slug: (q && q.titleSlug) || slug
+    };
+
+    var includeLang = cfg.md && ('INCLUDE_LANG_IN_MD' in cfg.md) ? !!cfg.md.INCLUDE_LANG_IN_MD : !!(cfg.md && cfg.md.includeLangInMd);
+    var reportMd;
+    try {
+      reportMd = reportBuilder(reportPayload, { includeLang: includeLang });
+      debugLog('pipeline/report:generated', { length: reportMd && reportMd.length });
+    } catch (e) {
+      errorLog('pipeline/report:buildError', e);
+      throw e;
+    }
 
     var nbOut = null;
     if (wantNotebook) {
-      nbOut = NBBuild.build({
-        question: q,
-        solved: solved,
-        descMd: descMd,
-        hints: hints,
-        testcases: { default: defaultBlob, custom: capturedBlob },
-        subs: rows,
-        detailsById: detailsById,
-        monacoEditor: monacoEditor,
-        storageScan: storageScan
-      });
+      var nbBuilder = getMethod(NBBuild, ['build']);
+      if (nbBuilder) {
+        try {
+          nbOut = nbBuilder({
+            question: q,
+            solved: solved,
+            descMd: descConv && descConv.md ? descConv.md : '',
+            hints: hints,
+            varNames: varNames,
+            defaultBlob: defaultBlob,
+            customBlob: capturedBlob,
+            subs: rows,
+            detailsById: detailsById,
+            monacoEditor: monacoEditor,
+            storageScan: storageScan
+          });
+          debugLog('pipeline/notebook:built', { filename: nbOut && nbOut.filename, cells: nbOut && nbOut.notebook && Array.isArray(nbOut.notebook.cells) ? nbOut.notebook.cells.length : null });
+        } catch (e) {
+          errorLog('pipeline/notebook:buildError', e);
+        }
+      } else {
+        errorLog('pipeline/notebook:builderMissing', new Error('NBBuild.build not available'));
+      }
     }
 
-    log.info('pipeline/finish', nowISO(), 'slug=', slug);
+    log.info('pipeline/finish', nowISO(), 'slug=', slug, 'rows=', rows.length);
+    debugLog('pipeline/output', { mdLength: reportMd && reportMd.length, hasNotebook: !!(nbOut && nbOut.notebook) });
     return { md: reportMd, notebook: nbOut && nbOut.notebook, filename: nbOut && nbOut.filename };
   }
 
