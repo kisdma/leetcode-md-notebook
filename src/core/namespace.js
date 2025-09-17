@@ -105,6 +105,10 @@
     return { ok: true };
   }
 
+  function defineNamespace(path) {
+    return ensurePath(path).node;
+  }
+
   // Attach a module object under a known bucket (e.g., ('util', 'string', {…}))
   function attach(bucket, key, mod, opts) {
     if (!bucket || !key) throw new Error('attach: need bucket and key');
@@ -159,6 +163,8 @@
     ensure: ensurePath,        // ({node, created})
     get: getPath,              // (path) -> any
     set: setPath,              // (path, value, opts?) -> {ok}
+    defineNS: defineNamespace, // (path) -> object
+    defineNamespace: defineNamespace, // alias for clarity
     attach: attach,            // (bucket, key, mod, opts?) -> bool
     exists: exists,            // (path) -> boolean
     keys: list,                // (path) -> string[]
@@ -167,6 +173,8 @@
     LEVELS: Object.assign({}, LEVELS)
   };
 
+  if (!LC.defineNS) LC.defineNS = defineNamespace;
+  if (!LC.defineNamespace) LC.defineNamespace = defineNamespace;
   // Install only if not installed already; allow later modules to reuse it
   if (!LC.core.namespace) {
     LC.core.namespace = api;
@@ -222,3 +230,4 @@
   })();
 
 })(typeof window !== 'undefined' ? window : this);
+
