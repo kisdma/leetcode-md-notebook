@@ -682,6 +682,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
             question: q,
             solved: solved,
             descMd: descConv && descConv.md ? descConv.md : '',
+            imgStats: descConv && descConv.imgStats ? descConv.imgStats : null,
             hints: hints,
             varNames: varNames,
             defaultBlob: defaultBlob,
