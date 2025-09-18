@@ -1,37 +1,33 @@
 ﻿# MLCS (MyLeetCodeSolutions)
 
-*A focused companion for documenting problems, preserving attempts, and exporting shareable notebooks.*
+MLCS adds a small helper toolbar to LeetCode problem pages. It captures the details you already see on the page—description, glossary snippets, test cases, and recent submissions—and lets you copy them as Markdown or download a Jupyter notebook for later review.
 
 ## Overview
-MLCS wraps each LeetCode problem page with a lightweight workspace: one click gathers a polished Markdown snapshot and an executable Jupyter notebook. It keeps track of custom runs, surfaces your recent submissions, and packages everything into a format you can review, study from, or share with teammates.
-
-## Highlights
-- Rich summaries in seconds: copy a neatly formatted Markdown report that captures the full description, glossary notes, test cases, and recent submissions.
-- Ready-to-run notebooks: export a `.ipynb` file that opens with a shared harness and your latest code, so you can continue experimenting offline.
-- Custom run awareness: the toolbar badge reminds you when the current problem already has captured inputs from the Run button.
-- Gentle UI: a compact floating toolbar keeps actions within reach without interfering with solving.
+- Collects the current problem statement, glossary notes, test data, and submission history into a single Markdown report.
+- Builds a `.ipynb` notebook that includes a harness plus the latest code pulled from the editor, local storage, and recent submissions.
+- Records when a custom “Run” input is detected and displays a badge so you know it will be included.
 
 ## Getting Started
-1. Install your preferred userscript manager (Tampermonkey, Violentmonkey, or similar).
+1. Install a userscript manager such as Tampermonkey or Violentmonkey.
 2. Add the MLCS userscript from this repository.
-3. Visit any LeetCode problem or contest page and wait for the toolbar near the bottom-right corner.
+3. Visit any supported LeetCode problem or contest page and wait for the toolbar near the bottom-right corner.
 
-## Daily Workflow
-- Click **Copy Report** to place a complete write-up on your clipboard. Paste it into notes, pull requests, or study journals.
-- Choose **Save .ipynb** to download a notebook containing the description, harness, and recent solutions.
-- Use **Copy Log** when you need a quick diagnostic snapshot while debugging.
-- Check the badge to confirm whether custom inputs from the Run button have been captured for this problem.
+## Using the Toolbar
+- **Copy Report** places the Markdown summary on your clipboard.
+- **Save .ipynb** downloads a notebook with the captured context and a reusable test harness.
+- **Copy Log** copies a diagnostic log that can help when reporting issues.
 
-## Tips for a Smooth Experience
-- Run at least once before copying or saving so custom input is included.
-- Keep the problem page open until the notebook download finishes.
+## Practical Notes
+- Run the problem at least once before copying or saving if you want custom input included.
+- Keep the page open until the notebook download completes.
+- No data leaves your browser; MLCS gathers information directly from the current page and LeetCode requests you initiate.
 
-## Frequently Asked Questions
-**Does it work on both leetcode.com and leetcode.cn?**  Yes. Problem and contest pages on either site are supported.
+## FAQ
+**Which sites are supported?**  Problem and contest pages on both leetcode.com and leetcode.cn.
 
-**Will it change my submissions?**  No. It only reads data already available in the page and formats it for export.
+**Does it change submissions?**  No. MLCS only reads content and structures it for export.
 
-**Is any information sent elsewhere?**  Everything stays in your browser. MLCS simply organises what LeetCode already provides.
+**Why the badge?**  It indicates that MLCS has seen a custom test case for the current problem.
 
-## Thanks
-MLCS began as an evening productivity experiment and has grown with feedback from solvers who wanted better notes, richer discussions, and smoother handoffs. Enjoy the workflow and keep shipping solutions!
+## Credits
+MLCS is maintained by everyday LeetCode users who wanted their scratch work and submissions in a reusable format. Suggestions and bug reports are welcome.
