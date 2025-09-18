@@ -48,6 +48,7 @@
   var MonacoTop  = CaptureNS.monaco_top    || CaptureNS.monacoTop    || { install: function(){}, request: function(){ return Promise.resolve({ code:'', langId:'', __info:{} }); } };
   var MonacoFr   = CaptureNS.monaco_frames || CaptureNS.monacoFrames || { request: function(){ return Promise.resolve({ code:'', langId:'', __info:{} }); } };
   var StorageScan= CaptureNS.storage_scan  || CaptureNS.storageScan  || { scan: function(){ return { ok:false, code:'', meta:{} }; } };
+  var Histograms = CaptureNS.histograms || { capture: async function(){ return { ok:false, charts:[], meta:{ error:'histograms missing' } }; } };
 
   var GQLNS      = (NS.lc && (NS.lc.gql || NS.lc.graphql)) || (NS.lc_api && NS.lc_api.graphql) || null;
   var GQL        = GQLNS || {};
@@ -626,6 +627,18 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
     }
     debugLog('pipeline/storage', { ok: storageScan && storageScan.ok, codeLength: storageScan && storageScan.code ? storageScan.code.length : 0, key: storageScan && storageScan.meta && storageScan.meta.key });
 
+    var histograms = { ok:false, charts:[], meta:{ error:'not attempted' } };
+    try {
+      if (Histograms && typeof Histograms.capture === 'function') {
+        var histCfg = (cfg.capture && cfg.capture.histograms) || {};
+        histograms = await Histograms.capture({ timeoutMs: histCfg.timeoutMs || 2000, intervalMs: histCfg.intervalMs || 120 });
+      }
+    } catch (e) {
+      errorLog('pipeline/histograms:error', e);
+      histograms = { ok:false, charts:[], meta:{ error: e && (e.message || e) } };
+    }
+    debugLog('pipeline/histograms', { ok: histograms && histograms.ok, charts: histograms && histograms.charts ? histograms.charts.length : 0 });
+
     if (!HTML2MD || typeof HTML2MD.convert !== 'function') {
       throw new Error('HTML2MD.convert not available');
     }
@@ -658,6 +671,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
       customBlob: capturedBlob,
       monacoEditor: monacoEditor,
       storageScan: storageScan,
+      histograms: histograms,
       rows: rows,
       detailsById: detailsById,
       slug: (q && q.titleSlug) || slug
@@ -691,6 +705,7 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
             detailsById: detailsById,
             monacoEditor: monacoEditor,
             storageScan: storageScan,
+            histograms: histograms,
             slug: (q && q.titleSlug) || slug
           });
           debugLog('pipeline/notebook:built', { filename: nbOut && nbOut.filename, cells: nbOut && nbOut.notebook && Array.isArray(nbOut.notebook.cells) ? nbOut.notebook.cells.length : null });

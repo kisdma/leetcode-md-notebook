@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         LeetCode → Full Markdown & Jupyter (Bootstrap, modular, verbose)
+// @name         LeetCode -> Full Markdown & Jupyter (Bootstrap, modular, verbose)
 // @namespace    https://tampermonkey.net/
 // @version      5.0.5
 // @description  Bootstrap loader that pulls modular LCMD from GitHub via @require, starts the pipeline, and logs rich diagnostics.
@@ -55,6 +55,7 @@
 // @require      https://raw.githubusercontent.com/__GH_USER__/leetcode-md-notebook/__REF__/src/capture/monaco_top.js
 // @require      https://raw.githubusercontent.com/__GH_USER__/leetcode-md-notebook/__REF__/src/capture/monaco_frames.js
 // @require      https://raw.githubusercontent.com/__GH_USER__/leetcode-md-notebook/__REF__/src/capture/storage_scan.js
+// @require      https://raw.githubusercontent.com/__GH_USER__/leetcode-md-notebook/__REF__/src/capture/histograms.js
 //
 // ---- LeetCode API clients ----
 // @require      https://raw.githubusercontent.com/__GH_USER__/leetcode-md-notebook/__REF__/src/lc_api/graphql.js
@@ -129,10 +130,10 @@
     var root = window.LCMD || {};
     var out = {};
     nsKeys(root).forEach(function(k){
-      if (depth <= 0) { out[k] = '(…)'; return; }
+      if (depth <= 0) { out[k] = '(...)'; return; }
       var lvl = {};
       nsKeys(root[k]).forEach(function(k2){
-        if (depth <= 1) { lvl[k2] = '(…)'; return; }
+        if (depth <= 1) { lvl[k2] = '(...)'; return; }
         try { lvl[k2] = Object.keys(root[k][k2] || {}); } catch(_) { lvl[k2] = '(uninspectable)'; }
       });
       out[k] = lvl;
@@ -258,7 +259,7 @@
     var p = resolvePipeline();
     if (p) {
       logPresenceInitial('[LCMD/BOOT] presence matrix (pipeline ready)');
-      info('pipeline found; booting…', {
+      info('pipeline found; booting...', {
         hasCore: !!NS.core,
         pipePath: (NS.core && NS.core.pipeline) ? 'LCMD.core.pipeline' : (NS.pipeline ? 'LCMD.pipeline' : '(unknown)')
       });

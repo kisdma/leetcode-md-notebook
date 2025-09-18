@@ -148,6 +148,56 @@
     return uniq;
   }
 
+  function histogramPlotCell(histograms){
+    var data = (histograms && typeof histograms === 'object') ? histograms : { charts: [] };
+    var jsonStr = JSON.stringify(data);
+    var literal = JSON.stringify(jsonStr);
+    var code = [
+      '# Histogram plotter (auto-generated)',
+      'import json'
+    ];
+    code.push('_LCMD_HISTOGRAMS = json.loads(' + literal + ')');
+    code = code.concat([
+      '',
+      'def _plot_histograms(data):',
+      '    charts = (data or {}).get("charts") or []',
+      '    if not charts:',
+      '        print("No histogram data captured.")',
+      '        return',
+      '    try:',
+      '        import matplotlib.pyplot as plt',
+      '    except Exception as exc:',
+      '        print("matplotlib is not available:", exc)',
+      '        return',
+      '    rows = len(charts)',
+      '    fig, axes = plt.subplots(rows, 1, figsize=(8, 4 * rows))',
+      '    if rows == 1:',
+      '        axes = [axes]',
+      '    for ax, chart in zip(axes, charts):',
+      '        series_list = chart.get("series") or []',
+      '        if not series_list:',
+      '            ax.set_title(chart.get("title") or chart.get("kind") or "Histogram")',
+      '            ax.text(0.5, 0.5, "(no data)", ha="center", va="center")',
+      '            continue',
+      '        for serie in series_list:',
+      '            points = serie.get("points") or []',
+      '            categories = [str(pt.get("category", pt.get("index"))) for pt in points]',
+      '            values = [pt.get("value") for pt in points]',
+      '            x = list(range(len(values)))',
+      '            ax.bar(x, values, label=serie.get("name") or None, alpha=0.7)',
+      '            ax.set_xticks(x)',
+      '            ax.set_xticklabels(categories, rotation=45, ha="right")',
+      '        ax.set_title(chart.get("title") or chart.get("kind") or "Histogram")',
+      '        ax.legend(loc="best")',
+      '    plt.tight_layout()',
+      '    plt.show()',
+      '',
+      '_plot_histograms(_LCMD_HISTOGRAMS)',
+      ''
+    ]);
+    return pyCell(code.join('\n'));
+  }
+
   function buildHarnessCell(varNames, uniqCases){
     var PARAMS_JSON = stringifyJson(varNames || []);
     var CASES_JSON  = stringifyJson(uniqCases || []);
@@ -482,6 +532,7 @@
     // 2) Harness
     var uniqCases = combineUniqueTestcases(payload.varNames || [], payload.defaultBlob || '', payload.customBlob || '');
     nb.cells.push(buildHarnessCell(payload.varNames || [], uniqCases));
+    nb.cells.push(histogramPlotCell(payload.histograms || {}));
 
     // 3) Reference (optional)
     var refCell = buildReferenceCellIfAny(rows, payload.detailsById || {});
@@ -508,6 +559,7 @@
     pyCell: pyCell,
     combineUniqueTestcases: combineUniqueTestcases,
     buildHarnessCell: buildHarnessCell,
+    histogramPlotCell: histogramPlotCell,
     buildReferenceCellIfAny: buildReferenceCellIfAny,
     monacoCell: monacoCell,
     localStorageCell: localStorageCell,
@@ -519,3 +571,4 @@
   NBNS.notebook = API; // legacy alias
 
 })(window.LCMD);
+

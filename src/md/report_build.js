@@ -137,6 +137,37 @@
     return md;
   }
 
+  function histogramsSection(histos){
+    if (!histos || !histos.ok || !Array.isArray(histos.charts) || !histos.charts.length) return '';
+    var md = '## Performance Histograms\n\n';
+    for (var i = 0; i < histos.charts.length; i++) {
+      var chart = histos.charts[i] || {};
+      var title = nonEmpty(chart.title) ? chart.title : (chart.kind ? (chart.kind.charAt(0).toUpperCase() + chart.kind.slice(1) + ' distribution') : ('Histogram ' + (i + 1)));
+      md += '### ' + title + '\n\n';
+      if (nonEmpty(chart.subtitle)) {
+        md += '_' + chart.subtitle + '_\n\n';
+      }
+      var series = Array.isArray(chart.series) ? chart.series : [];
+      for (var s = 0; s < series.length; s++) {
+        var serie = series[s] || {};
+        var points = Array.isArray(serie.points) ? serie.points : [];
+        if (!points.length) continue;
+        if (series.length > 1 && nonEmpty(serie.name)) {
+          md += '**' + serie.name.replace(/\|/g, '\\|') + '**\n\n';
+        }
+        md += '| Band | Count |\n|:-----|------:|\n';
+        for (var p = 0; p < points.length; p++) {
+          var pt = points[p] || {};
+          var label = nonEmpty(pt.category) ? pt.category : ('#' + (pt.index != null ? (pt.index + 1) : (p + 1)));
+          var val = pt.value != null ? pt.value : '';
+          md += '| ' + String(label).replace(/\|/g, '\\|') + ' | ' + String(val) + ' |\n';
+        }
+        md += '\n';
+      }
+    }
+    return md;
+  }
+
   function hintsSection(hints){
     if (!Array.isArray(hints) || hints.length === 0) return '';
     var lines = hints.map(function(h, i){ return ' ' + (i+1) + '. ' + String(h).replace(/\s+/g,' ').trim(); }).join('\n');
@@ -304,6 +335,7 @@
     md += descriptionBlock(P.descMd || '', P.imgStats || null);
     md += hintsSection(P.hints || []);
     md += testcasesSection(P.varNames || [], P.defaultBlob || '', P.customBlob || '');
+    md += histogramsSection(P.histograms || null);
     md += monacoSection(P.monacoEditor || null);
     md += storageSection(P.storageScan || null);
     md += submissionsTable(P.slug || q.titleSlug || '', rows, opts || {});
@@ -328,6 +360,7 @@
     submissionCodeBlocks: submissionCodeBlocks,
     monacoSection: monacoSection,
     storageSection: storageSection,
+    histogramsSection: histogramsSection,
     // full
     buildFullReport: buildFullReport,
     build: buildFullReport // legacy name
