@@ -9,6 +9,15 @@
   if (!NS || !NS.defineNS) return;
 
   var CAP = NS.defineNS('capture');
+
+  // Access the real page window to reach Highcharts
+  var pageWindow;
+  try {
+    pageWindow = (typeof unsafeWindow !== 'undefined' && unsafeWindow) || window;
+  } catch (_) {
+    pageWindow = window;
+  }
+
   var existing = CAP.histograms;
   if (existing && existing.__ready__) return;
 
@@ -91,7 +100,10 @@
   }
 
   function gatherOnce(){
-    var chartsArr = (window.Highcharts && Array.isArray(window.Highcharts.charts)) ? window.Highcharts.charts : [];
+    var chartsArr = (pageWindow.Highcharts && Array.isArray(pageWindow.Highcharts.charts)) ? pageWindow.Highcharts.charts : [];
+    if (!chartsArr.length && window.Highcharts && Array.isArray(window.Highcharts.charts)) {
+      chartsArr = window.Highcharts.charts;
+    }
     var out = [];
     for (var i = 0; i < chartsArr.length; i++) {
       var chart = chartsArr[i];
