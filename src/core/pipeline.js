@@ -714,13 +714,20 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
     if (BUSY) return;
     BUSY = true; try{
       var out = await runPipeline({ produceReport:true, wantNotebook:false });
-      await copyText(out.md);
-      log.info('report: copied to clipboard');
+      var copied = await copyText(out.md);
+      if (copied) {
+        log.info('report: copied to clipboard');
+        try { Toolbar.showToast && Toolbar.showToast('Report copied to clipboard.'); } catch (_) {}
+      } else {
+        if (log && typeof log.warn === 'function') { log.warn('report: clipboard copy failed'); }
+        try { Toolbar.showToast && Toolbar.showToast('Report ready, but clipboard access was blocked.'); } catch (_) {}
+      }
     } catch (e){
       log.error('report error', e && (e.message || e));
-      alert('Error building report — see console.');
+      alert('Error building report - see console.');
     } finally { BUSY = false; }
   }
+
 
   async function onCopyLog(){
     try { await log.copyToClipboard(); } catch(_){}
@@ -733,12 +740,17 @@ function getVariableNames(q, capturedBlob, defaultBlob) {
       var fname = (out && out.filename) || ('LC-' + (getSlugFromPath() || 'unknown') + '.ipynb');
       var nbJSON = JSON.stringify(out.notebook || {cells:[],metadata:{},nbformat:4,nbformat_minor:5}, null, 2);
       var ok = await downloadFile(fname, 'application/x-ipynb+json;charset=utf-8', nbJSON);
-      if (!ok) alert('Failed to save notebook (check console).');
+      if (ok) {
+        try { Toolbar.showToast && Toolbar.showToast('Notebook saved as ' + fname + '.'); } catch (_) {}
+      } else {
+        alert('Failed to save notebook (check console).');
+      }
     } catch (e){
       log.error('notebook error', e && (e.message || e));
-      alert('Error building notebook — see console.');
+      alert('Error building notebook - see console.');
     } finally { BUSY = false; }
   }
+
 
   /* ----------------------- Bootstrap ----------------------- */
   function installNetworkTap(){

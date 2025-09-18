@@ -52,6 +52,8 @@
   function makeBtn(label) {
     var b = document.createElement('button');
     b.textContent = label;
+    b.dataset.defaultLabel = label;
+    b.dataset.busy = '0';
     b.className = 'lcmd-btn';
     b.style.padding = '10px 12px';
     b.style.borderRadius = '10px';
@@ -61,9 +63,65 @@
     b.style.cursor = 'pointer';
     b.style.boxShadow = '0 2px 10px rgba(0,0,0,0.15)';
     b.style.fontFamily = 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"';
-    b.addEventListener('mouseenter', function(){ b.style.background = '#f7f7f7'; });
-    b.addEventListener('mouseleave', function(){ b.style.background = '#fff'; });
+    b.style.whiteSpace = 'nowrap';
+    b.addEventListener('mouseenter', function(){ if (b.dataset.busy !== '1') b.style.background = '#f7f7f7'; });
+    b.addEventListener('mouseleave', function(){ if (b.dataset.busy !== '1') b.style.background = '#fff'; });
     return b;
+  }
+
+  function lockButtonWidth(btn) {
+    if (!btn || btn.dataset.minWidthLocked === '1') return;
+    requestAnimationFrame(function(){
+      if (!btn || !btn.isConnected) return;
+      var rect = btn.getBoundingClientRect();
+      if (rect && rect.width) {
+        btn.style.minWidth = rect.width + 'px';
+        btn.dataset.minWidthLocked = '1';
+      }
+    });
+  }
+
+  function setButtonLabel(btn, text) {
+    if (!btn) return;
+    btn.textContent = text;
+  }
+
+  function runHandlerWithBusyState(btn, handler, busyLabel, missingMsg) {
+    if (!btn) return;
+    if (btn.dataset.busy === '1') return;
+    if (typeof handler !== 'function') {
+      if (missingMsg) showToast(missingMsg);
+      return;
+    }
+    var original = btn.dataset.defaultLabel || btn.textContent || '';
+    btn.dataset.busy = '1';
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    btn.style.background = '#f0f0f0';
+    btn.style.cursor = 'progress';
+    setButtonLabel(btn, busyLabel);
+
+    var finalize = function(){
+      btn.dataset.busy = '0';
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+      btn.style.background = '#fff';
+      btn.style.cursor = 'pointer';
+      setButtonLabel(btn, original);
+    };
+
+    var result;
+    try {
+      result = handler();
+    } catch (err) {
+      console.error('[LCMD] toolbar handler error', err);
+      finalize();
+      return;
+    }
+
+    Promise.resolve(result).catch(function(err){
+      console.error('[LCMD] toolbar handler rejection', err);
+    }).finally(finalize);
   }
 
   function ensureToast() {
@@ -115,20 +173,17 @@
   function wireHandlers() {
     if ($btnReport) {
       $btnReport.onclick = function () {
-        if (typeof _handlers.onCopyReport === 'function') _handlers.onCopyReport();
-        else showToast('No handler connected for Copy Report.');
+        runHandlerWithBusyState($btnReport, _handlers.onCopyReport, 'Copying…', 'No handler connected for Copy Report.');
       };
     }
     if ($btnLog) {
       $btnLog.onclick = function () {
-        if (typeof _handlers.onCopyLog === 'function') _handlers.onCopyLog();
-        else showToast('No handler connected for Copy Log.');
+        runHandlerWithBusyState($btnLog, _handlers.onCopyLog, 'Copying…', 'No handler connected for Copy Log.');
       };
     }
     if ($btnSave) {
       $btnSave.onclick = function () {
-        if (typeof _handlers.onSaveNotebook === 'function') _handlers.onSaveNotebook();
-        else showToast('No handler connected for Save .ipynb.');
+        runHandlerWithBusyState($btnSave, _handlers.onSaveNotebook, 'Saving…', 'No handler connected for Save .ipynb.');
       };
     }
   }
@@ -160,6 +215,9 @@
     $bar.appendChild($badge);
 
     document.body.appendChild($bar);
+    lockButtonWidth($btnReport);
+    lockButtonWidth($btnSave);
+    lockButtonWidth($btnLog);
     ensureToast();
     wireHandlers();
     updateCaptureBadge();
