@@ -25,6 +25,35 @@
   function sleep(ms) { return new Promise(function (res) { setTimeout(res, ms); }); }
   function norm(str) { return (str == null) ? '' : String(str).replace(/\s+/g, ' ').trim(); }
 
+  var LOG_PREFIX = '[LCMD/hist]';
+
+  function logEvent(event, payload) {
+    try {
+      var parts = [LOG_PREFIX, event];
+      if (payload && typeof payload === 'object') {
+        Object.keys(payload).slice(0, 12).forEach(function (key) {
+          var val = payload[key];
+          if (val === undefined) return;
+          var type = typeof val;
+          if (val === null || type === 'number' || type === 'boolean') {
+            parts.push(key + '=' + val);
+          } else if (type === 'string') {
+            parts.push(key + '=' + val);
+          } else {
+            try {
+              parts.push(key + '=' + JSON.stringify(val));
+            } catch (_) {
+              parts.push(key + '=' + String(val));
+            }
+          }
+        });
+      }
+      console.log(parts.join(' '));
+    } catch (e) {
+      try { console.log(LOG_PREFIX, event); } catch (_) {}
+    }
+  }
+
   var perf = (pageWindow && pageWindow.performance) || (window && window.performance) || null;
   var perfNow = (perf && typeof perf.now === 'function') ? function () { return perf.now(); } : function () { return Date.now(); };
 
@@ -130,7 +159,22 @@
   function fire(el, type, x, y) {
     if (!el || typeof el.dispatchEvent !== 'function') return;
     var win = pageWindow || window;
-    var opts = { bubbles: true, cancelable: true, view: win, clientX: x, clientY: y };
+    var opts = {
+      bubbles: true,
+      cancelable: true,
+      view: win,
+      clientX: x,
+      clientY: y,
+      screenX: x,
+      screenY: y,
+      buttons: 0,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      width: 1,
+      height: 1,
+      pressure: 0.5
+    };
     try {
       el.dispatchEvent(new win.PointerEvent(type, opts));
     } catch (_) {
@@ -319,31 +363,51 @@
 
   async function waitForChartsNearTab(tabEl, timeout) {
     var limit = typeof timeout === 'number' ? timeout : 1800;
+    var label = norm((tabEl && tabEl.textContent) || '').slice(0, 60);
     var start = Date.now();
-    for (;;) {
+    logEvent('waitCharts.start', { label: label, timeout: limit });
+    while (Date.now() - start <= limit) {
       var svgs = chartsNearTab(tabEl);
       for (var i = 0; i < svgs.length; i++) {
-        if (visibleNonZeroBars(svgs[i]).length) return true;
+        var bars = visibleNonZeroBars(svgs[i]).length;
+        if (bars) {
+          logEvent('waitCharts.ready', { label: label, elapsed: Date.now() - start, svgs: svgs.length, bars: bars });
+          return true;
+        }
       }
-      if (Date.now() - start > limit) return svgs.length > 0;
       await sleep(60);
     }
+    var remaining = chartsNearTab(tabEl).length;
+    logEvent('waitCharts.timeout', { label: label, elapsed: Date.now() - start, svgs: remaining });
+    return remaining > 0;
   }
 
   async function clickSubpanel(name) {
+    logEvent('tab.search', { label: name });
     var tab = findTabByName(name);
-    if (!tab) return { ok: false, tab: null };
+    if (!tab) {
+      logEvent('tab.search.miss', { label: name });
+      return { ok: false, tab: null };
+    }
     try { tab.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }); } catch (_) {}
-    try { tab.click(); } catch (_) {}
+    try { tab.click(); logEvent('tab.clicked', { label: name }); } catch (_) { logEvent('tab.click.error', { label: name }); }
     TipWatch.bump();
-    await waitForChartsNearTab(tab, 2000);
-    return { ok: true, tab: tab };
+    var ready = await waitForChartsNearTab(tab, 2000);
+    logEvent('tab.ready', { label: name, chartsReady: ready });
+    return { ok: true, tab: tab, chartsReady: ready };
   }
-
   async function hoverBarsOnSvg(chart, svg, tooltipMap) {
-    if (!chart || !svg) return;
+    if (!chart || !svg) {
+      logEvent('hover.skip', { reason: 'missingChartOrSvg' });
+      return;
+    }
     var bars = visibleNonZeroBars(svg);
-    if (!bars.length) return;
+    var chartTitle = norm(titleFromChart(chart) || '');
+    logEvent('hover.start', { chart: chartTitle, svgId: svg.id || null, bars: bars.length });
+    if (!bars.length) {
+      logEvent('hover.empty', { chart: chartTitle, reason: 'noVisibleBars' });
+      return;
+    }
 
     var target = getMouseTarget(svg) || svg;
     var plotBG = getPlotBG(svg);
@@ -360,11 +424,19 @@
       } catch (_) { plotPt = null; }
     }
 
+    var hovered = 0;
+
     for (var i = 0; i < bars.length; i++) {
       var bar = bars[i];
       var point = (bar && bar.point) || (bar && bar.__dataPoint) || (bar && bar.parentNode && bar.parentNode.point) || null;
-      if (!point || !point.series || point.series.chart !== chart) continue;
-      if (tooltipMap && tooltipMap.has(point)) continue;
+      if (!point || !point.series || point.series.chart !== chart) {
+        logEvent('hover.point.skip', { idx: i, reason: 'noPoint' });
+        continue;
+      }
+      if (tooltipMap && tooltipMap.has(point)) {
+        logEvent('hover.point.skip', { idx: i, reason: 'alreadyCaptured' });
+        continue;
+      }
 
       try { bar.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }); } catch (_) {}
 
@@ -377,6 +449,8 @@
 
       var prevTS = TipWatch.get().ts;
       var pos = centerFromBBox(svg, bar);
+      var categoryPreview = stringCategory(point, point.series) || '';
+      logEvent('hover.point.begin', { idx: i, category: categoryPreview, series: norm((point.series && point.series.name) || ''), hasGraphic: !!(point.graphic && point.graphic.element) });
 
       fire(bar, 'pointerover', pos.x, pos.y);
       fire(target, 'pointermove', pos.x, pos.y);
@@ -397,58 +471,107 @@
         await sleep(20);
       }
 
+      var tooltipSource = '';
       var tipObs = await TipWatch.waitChange(prevTS, 40);
-      var text = extractTooltipText(chart, svg, bar) || (tipObs && tipObs.text) || '';
+      var text = extractTooltipText(chart, svg, bar);
+      if (text) {
+        tooltipSource = 'dom';
+      } else if (tipObs && tipObs.text) {
+        text = tipObs.text;
+        tooltipSource = 'tipwatch';
+      }
       if (!text) {
         await sleep(20);
-        var tip = TipWatch.get();
-        text = extractTooltipText(chart, svg, bar) || (tip && tip.text) || '';
+        var tipNext = TipWatch.get();
+        var retry = extractTooltipText(chart, svg, bar) || (tipNext && tipNext.text) || '';
+        if (retry) {
+          text = retry;
+          if (!tooltipSource) {
+            tooltipSource = tipNext && tipNext.text ? 'tipwatch-late' : 'dom-retry';
+          }
+        }
       }
 
-      if (tooltipMap) {
-        tooltipMap.set(point, norm(text));
+      if (text) {
+        var normalized = norm(text);
+        if (tooltipMap) {
+          tooltipMap.set(point, normalized);
+        }
+        hovered++;
+        logEvent('hover.point.tooltip', { idx: i, source: tooltipSource || 'unknown', length: normalized.length, preview: normalized.slice(0, 120) });
+      } else {
+        logEvent('hover.point.tooltip.miss', { idx: i });
       }
 
       await sleep(16);
     }
+
+    logEvent('hover.complete', { chart: chartTitle, hovered: hovered, stored: tooltipMap ? tooltipMap.size : null });
   }
 
+
+
+
   async function processPhase(label, tooltipByChart) {
-    var res = await clickSubpanel(label);
-    var anchor = res.tab || document.body;
-    var svgs = chartsNearTab(anchor);
-    var seen = new WeakSet();
-    for (var i = 0; i < svgs.length; i++) {
-      var svg = svgs[i];
-      if (!svg || seen.has(svg)) continue;
-      seen.add(svg);
-      var chart = chartFromSvg(svg);
-      if (!chart) continue;
-      var tooltipMap = tooltipByChart.get(chart);
-      if (!tooltipMap) {
-        tooltipMap = new Map();
-        tooltipByChart.set(chart, tooltipMap);
-      }
-      await hoverBarsOnSvg(chart, svg, tooltipMap);
-    }
+  logEvent('phase.start', { label: label });
+  var res = await clickSubpanel(label);
+  logEvent('phase.tab', { label: label, ok: !!(res && res.ok), chartsReady: !!(res && res.chartsReady) });
+  if (!res || !res.ok) {
+    return;
   }
+  var anchor = res.tab || document.body;
+  var svgs = chartsNearTab(anchor);
+  logEvent('phase.svgs', { label: label, count: svgs.length });
+  var seen = new WeakSet();
+  for (var i = 0; i < svgs.length; i++) {
+    var svg = svgs[i];
+    if (!svg) continue;
+    if (seen.has(svg)) {
+      logEvent('phase.svg.skip', { label: label, index: i, reason: 'duplicate' });
+      continue;
+    }
+    seen.add(svg);
+    var chart = chartFromSvg(svg);
+    if (!chart) {
+      logEvent('phase.svg.skip', { label: label, index: i, reason: 'noChart' });
+      continue;
+    }
+    var tooltipMap = tooltipByChart.get(chart);
+    if (!tooltipMap) {
+      tooltipMap = new Map();
+      tooltipByChart.set(chart, tooltipMap);
+    }
+    logEvent('phase.chart', { label: label, index: i, title: norm(titleFromChart(chart) || '') });
+    await hoverBarsOnSvg(chart, svg, tooltipMap);
+  }
+}
+
 
   async function processAllPhases(tooltipByChart) {
     var labels = ['Runtime', 'Memory'];
+    logEvent('phases.start', { labels: labels.join(',') });
     for (var i = 0; i < labels.length; i++) {
       try {
         await processPhase(labels[i], tooltipByChart);
-      } catch (_) {}
+      } catch (e) {
+        logEvent('phase.error', { label: labels[i], message: e && e.message });
+      }
     }
+    logEvent('phases.complete', { labels: labels.join(','), processed: labels.length });
   }
 
   async function waitForAnyChart(timeout) {
     var limit = typeof timeout === 'number' ? timeout : 2000;
     var start = Date.now();
+    logEvent('waitForAnyChart.start', { timeout: limit });
     while (Date.now() - start <= limit) {
-      if (document.querySelector('svg.highcharts-root')) return true;
+      if (document.querySelector('svg.highcharts-root')) {
+        logEvent('waitForAnyChart.ready', { elapsed: Date.now() - start });
+        return true;
+      }
       await sleep(100);
     }
+    logEvent('waitForAnyChart.timeout', { elapsed: Date.now() - start });
     return false;
   }
 
@@ -485,6 +608,7 @@
 
   function gatherOnce(tooltipByChart) {
     var chartsArr = listCharts();
+    logEvent('gather.start', { charts: chartsArr.length });
     var out = [];
     for (var i = 0; i < chartsArr.length; i++) {
       var chart = chartsArr[i];
@@ -498,15 +622,18 @@
         if (serData) collected.push(serData);
       }
       if (!collected.length) continue;
-      out.push({
+      var entry = {
         chartIndex: i,
         kind: guessKind(chart),
         title: titleFromChart(chart),
         subtitle: subtitleFromChart(chart),
         renderToId: (chart.renderTo && chart.renderTo.id) || null,
         series: collected
-      });
+      };
+      out.push(entry);
+      logEvent('gather.chart', { index: i, title: norm(entry.title || ''), series: collected.length, tooltipMap: tooltipMap ? tooltipMap.size : null });
     }
+    logEvent('gather.complete', { charts: out.length });
     return out;
   }
 
@@ -517,18 +644,25 @@
     var deadline = Date.now() + timeout;
     var tooltipByChart = new Map();
     var lastCharts = [];
+    var attempt = 0;
 
+    logEvent('capture.start', { timeout: timeout, interval: interval });
     await waitForAnyChart(Math.min(timeout, 4000));
 
     while (Date.now() <= deadline) {
+      attempt += 1;
+      logEvent('capture.attempt', { attempt: attempt, tooltipCharts: tooltipByChart.size });
       await processAllPhases(tooltipByChart);
       var charts = gatherOnce(tooltipByChart);
       if (charts.length) {
+        logEvent('capture.success', { attempt: attempt, charts: charts.length });
         return { ok: true, charts: charts, capturedAt: nowISO() };
       }
       lastCharts = charts;
+      logEvent('capture.retry', { attempt: attempt, charts: charts.length });
       await sleep(interval);
     }
+    logEvent('capture.fail', { attempts: attempt, lastCharts: lastCharts.length });
     return { ok: false, charts: lastCharts || [], capturedAt: nowISO(), meta: { error: 'histograms not found' } };
   }
 
