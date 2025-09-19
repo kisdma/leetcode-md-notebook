@@ -220,22 +220,65 @@
     return out;
   }
 
+
+
   function chartFromSvg(svg) {
     if (!svg) return null;
+    var container = (typeof svg.closest === 'function') ? svg.closest('.highcharts-container') : null;
+    if (!container && svg.parentElement) container = svg.parentElement;
     var charts = listCharts();
+
+    if (container && typeof container.getAttribute === 'function') {
+      var attr = container.getAttribute('data-highcharts-chart');
+      if (attr != null && attr !== '') {
+        var idx = Number(attr);
+        if (!isNaN(idx)) {
+          var arr = (pageWindow.Highcharts && Array.isArray(pageWindow.Highcharts.charts)) ? pageWindow.Highcharts.charts : [];
+          var candidate = charts[idx] || (arr[idx] || null);
+          if (candidate) {
+            logEvent('chart.match', { method: 'dataAttr', id: idx, success: true });
+            return candidate;
+          } else {
+            logEvent('chart.match', { method: 'dataAttr', id: idx, success: false });
+          }
+        }
+      }
+    }
+
     for (var i = 0; i < charts.length; i++) {
       var chart = charts[i];
       if (!chart) continue;
-      var container = chart.container;
+      var c1 = chart.container;
+      var c2 = chart.renderTo;
       try {
-        if (container && typeof container.contains === 'function' && container.contains(svg)) {
+        if (c1 && typeof c1.contains === 'function' && c1.contains(svg)) {
+          logEvent('chart.match', { method: 'container', index: chart.index != null ? chart.index : i, success: true });
           return chart;
         }
       } catch (_) {}
+      try {
+        if (c2 && typeof c2.contains === 'function' && c2.contains(svg)) {
+          logEvent('chart.match', { method: 'renderTo', index: chart.index != null ? chart.index : i, success: true });
+          return chart;
+        }
+      } catch (_) {}
+      try {
+        if (c1 && typeof c1.querySelector === 'function') {
+          var root = c1.querySelector('svg.highcharts-root');
+          if (root === svg) {
+            logEvent('chart.match', { method: 'querySelector', index: chart.index != null ? chart.index : i, success: true });
+            return chart;
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (container) {
+      var dataId = container.getAttribute && container.getAttribute('data-highcharts-chart');
+      logEvent('chart.match', { method: 'fallback', success: false, svgId: svg.id || null, containerId: container.id || null, dataId: dataId || null });
     }
     return null;
   }
-
   function extractTooltipText(chart, svg, barEl) {
     var container = null;
     if (barEl && typeof barEl.closest === 'function') {
@@ -533,7 +576,9 @@
     seen.add(svg);
     var chart = chartFromSvg(svg);
     if (!chart) {
-      logEvent('phase.svg.skip', { label: label, index: i, reason: 'noChart' });
+      var cont = (typeof svg.closest === 'function') ? svg.closest('.highcharts-container') : null;
+      var dataId = cont && cont.getAttribute && cont.getAttribute('data-highcharts-chart');
+      logEvent('phase.svg.skip', { label: label, index: i, reason: 'noChart', containerId: cont && cont.id || null, dataId: dataId || null });
       continue;
     }
     var tooltipMap = tooltipByChart.get(chart);
