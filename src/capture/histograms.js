@@ -226,6 +226,7 @@
     if (!svg) return null;
     var container = (typeof svg.closest === 'function') ? svg.closest('.highcharts-container') : null;
     if (!container && svg.parentElement) container = svg.parentElement;
+    var containerId = container && container.id || null;
     var charts = listCharts();
 
     if (container && typeof container.getAttribute === 'function') {
@@ -250,6 +251,12 @@
       if (!chart) continue;
       var c1 = chart.container;
       var c2 = chart.renderTo;
+      var c1Id = (c1 && c1.id) || (c1 && c1.getAttribute && c1.getAttribute('id')) || null;
+      var c2Id = (c2 && c2.id) || (c2 && c2.getAttribute && c2.getAttribute('id')) || null;
+      if (containerId && (containerId === c1Id || containerId === c2Id)) {
+        logEvent('chart.match', { method: 'id', index: chart.index != null ? chart.index : i, containerId: containerId, success: true });
+        return chart;
+      }
       try {
         if (c1 && typeof c1.contains === 'function' && c1.contains(svg)) {
           logEvent('chart.match', { method: 'container', index: chart.index != null ? chart.index : i, success: true });
@@ -275,10 +282,11 @@
 
     if (container) {
       var dataId = container.getAttribute && container.getAttribute('data-highcharts-chart');
-      logEvent('chart.match', { method: 'fallback', success: false, svgId: svg.id || null, containerId: container.id || null, dataId: dataId || null });
+      logEvent('chart.match', { method: 'fallback', success: false, svgId: svg.id || null, containerId: containerId, dataId: dataId || null });
     }
     return null;
   }
+
   function extractTooltipText(chart, svg, barEl) {
     var container = null;
     if (barEl && typeof barEl.closest === 'function') {
