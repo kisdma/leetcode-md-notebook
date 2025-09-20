@@ -5,6 +5,7 @@ MLCS adds a small helper toolbar to LeetCode problem pages. It captures the deta
 ## Overview
 - Collects the current problem statement, glossary notes, test data, and submission history into a single Markdown report.
 - Builds a `.ipynb` notebook that includes a harness plus the latest code pulled from the editor, local storage, and recent submissions.
+- Captures runtime and memory histograms from the performance panels and adds a ready-to-plot cell to the notebook.
 - Records when a custom “Run” input is detected and displays a badge so you know it will be included.
 
 ## Getting Started
@@ -20,6 +21,7 @@ MLCS adds a small helper toolbar to LeetCode problem pages. It captures the deta
 ## Practical Notes
 - Run the problem at least once before copying or saving if you want custom input included.
 - Keep the page open until the notebook download completes.
+- Avoid moving your mouse while histogram tooltips are being gathered; the capture script drives the pointer and manual movement can cause missing bars.
 - No data leaves your browser; MLCS gathers information directly from the current page and LeetCode requests you initiate.
 
 ## FAQ
