@@ -226,11 +226,200 @@
     if (!chart) return null;
     var entry = store.get(chart);
     if (!entry) {
-      entry = { chart: chart, tooltips: new Map(), phases: new Set() };
+      entry = { chart: chart, phases: new Map(), phaseNames: new Set() };
       store.set(chart, entry);
       logEvent('chart.bind', { chartIndex: chart.index != null ? chart.index : null, title: norm(titleFromChart(chart) || '') });
     }
     return entry;
+  }
+
+  function normalizedPhase(label) {
+    var s = typeof label === 'string' ? label.trim().toLowerCase() : '';
+    return s || 'default';
+  }
+
+  function makePhaseBucket(label) {
+    return {
+      label: label || '',
+      tooltips: new Map(),
+      snapshots: new Map()
+    };
+  }
+
+  function getPhaseBucket(entry, label) {
+    if (!entry) return null;
+    var key = normalizedPhase(label);
+    var bucket = entry.phases.get(key);
+    if (!bucket) {
+      bucket = makePhaseBucket(label);
+      entry.phases.set(key, bucket);
+    }
+    return bucket;
+  }
+
+  var UNIT_NORMALIZE = {
+    ns: 'ns',
+    '\u00b5s': '\u00b5s',
+    'µs': '\u00b5s',
+    'μs': '\u00b5s',
+    us: '\u00b5s',
+    ms: 'ms',
+    s: 's',
+    b: 'B',
+    kb: 'KB',
+    mb: 'MB',
+    gb: 'GB'
+  };
+
+  var LONG_UNIT_NORMALIZE = {
+    nanosecond: 'ns',
+    nanoseconds: 'ns',
+    microsecond: '\u00b5s',
+    microseconds: '\u00b5s',
+    millisecond: 'ms',
+    milliseconds: 'ms',
+    second: 's',
+    seconds: 's',
+    byte: 'B',
+    bytes: 'B',
+    kilobyte: 'KB',
+    kilobytes: 'KB',
+    megabyte: 'MB',
+    megabytes: 'MB',
+    gigabyte: 'GB',
+    gigabytes: 'GB'
+  };
+
+  var METRIC_RE_SHORT = /(\d+(?:[.,]\d+)?)(?:\s*)(ns|\u00b5s|us|ms|s|b|kb|mb|gb)\b/i;
+  var METRIC_RE_LONG = /(\d+(?:[.,]\d+)?)(?:\s*)(nanoseconds?|microseconds?|milliseconds?|seconds?|bytes?|kilobytes?|megabytes?|gigabytes?)\b/i;
+
+  function normalizeUnit(unit) {
+    if (!unit) return '';
+    var s = String(unit).trim();
+    if (!s) return '';
+    var short = UNIT_NORMALIZE[s.toLowerCase()];
+    if (short) return short;
+    var long = LONG_UNIT_NORMALIZE[s.toLowerCase()];
+    if (long) return long;
+    return s;
+  }
+
+  function defaultUnitForPhase(label) {
+    var phase = normalizedPhase(label);
+    if (phase.indexOf('memory') !== -1) return 'MB';
+    if (phase.indexOf('runtime') !== -1) return 'ms';
+    return '';
+  }
+
+  function parseMetricFromTooltip(text, phaseLabel) {
+    if (!text) return null;
+    var cleaned = norm(text);
+    if (!cleaned) return null;
+    var match = METRIC_RE_SHORT.exec(cleaned) || METRIC_RE_LONG.exec(cleaned);
+    if (!match) return null;
+    var rawValue = String(match[1] || '').replace(/\u202f/g, '').trim();
+    if (!rawValue) return null;
+    var normalizedValue;
+    if (rawValue.indexOf(',') !== -1 && rawValue.indexOf('.') === -1) {
+      normalizedValue = rawValue.replace(/,/g, '.');
+    } else {
+      normalizedValue = rawValue.replace(/,/g, '');
+    }
+    var value = parseFloat(normalizedValue);
+    if (!isFinite(value)) return null;
+    var unit = normalizeUnit(match[2]);
+    if (!unit) unit = defaultUnitForPhase(phaseLabel);
+    var label = rawValue + (unit ? (' ' + unit) : '');
+    return { value: value, unit: unit || null, label: label, rawValue: rawValue };
+  }
+
+  function deriveCategoryLabel(rawCategory, metric, tooltipText, phaseLabel, index) {
+    var category = norm(rawCategory || '');
+    if (category) return category;
+    if (metric && metric.label) return metric.label;
+    if (tooltipText) {
+      var text = norm(tooltipText);
+      if (text) {
+        var beforePct = text.split(/(?:beats|beat|submissions)/i)[0].trim();
+        if (beforePct) return beforePct;
+        if (text.length <= 48) return text;
+      }
+    }
+    if (typeof index === 'number') {
+      var phase = norm(phaseLabel || '');
+      if (phase) return phase + ' #' + (index + 1);
+      return '#' + (index + 1);
+    }
+    return '';
+  }
+
+  function storeSnapshotForPhase(bucket, point, tooltipText, phaseLabel) {
+    if (!bucket || !point) return;
+    var series = point.series || {};
+    var seriesName = series && series.name ? String(series.name) : '';
+    var seriesType = series && series.type ? String(series.type) : '';
+    var idx = (typeof point.index === 'number') ? point.index :
+              (typeof point.x === 'number' && isFinite(point.x) ? point.x :
+               bucket.snapshots.size);
+    var rawCategory = stringCategory(point, series);
+    var numericX = null;
+    if (typeof point.category === 'number' && isFinite(point.category)) numericX = point.category;
+    else if (typeof point.x === 'number' && isFinite(point.x)) numericX = point.x;
+    else if (point.options && typeof point.options.x === 'number' && isFinite(point.options.x)) numericX = point.options.x;
+    var percent = (point.y != null) ? Number(point.y) : null;
+    if (percent != null && !isFinite(percent)) percent = null;
+    var metric = parseMetricFromTooltip(tooltipText || '', phaseLabel);
+    if (!metric && numericX != null) {
+      var fallbackUnit = defaultUnitForPhase(phaseLabel);
+      if (fallbackUnit) {
+        metric = { value: numericX, unit: fallbackUnit, label: numericX + ' ' + fallbackUnit, derived: true };
+      }
+    }
+    var categoryLabel = deriveCategoryLabel(rawCategory, metric, tooltipText, phaseLabel, idx);
+    var metricValue = metric && metric.value != null ? metric.value : (numericX != null ? numericX : null);
+    var metricUnit = metric && metric.unit ? metric.unit : (metricValue != null ? defaultUnitForPhase(phaseLabel) || null : null);
+    var metricLabel = metric && metric.label ? metric.label : (metricValue != null && metricUnit ? (metricValue + ' ' + metricUnit) : (metricValue != null ? String(metricValue) : null));
+    var keyParts = [
+      seriesName || '',
+      (typeof idx === 'number' && isFinite(idx)) ? idx : '',
+      rawCategory ? norm(rawCategory) : '',
+      metricLabel || ''
+    ];
+    var key = keyParts.join('::');
+    var snapshot = bucket.snapshots.get(key);
+    if (!snapshot) {
+      snapshot = {
+        index: idx,
+        seriesName: seriesName,
+        seriesType: seriesType,
+        value: percent,
+        category: categoryLabel,
+        rawCategory: rawCategory || '',
+        rawLabel: tooltipText || '',
+        metricValue: metricValue,
+        metricUnit: metricUnit,
+        metricLabel: metricLabel,
+        xValue: metricValue
+      };
+      bucket.snapshots.set(key, snapshot);
+      return;
+    }
+    if ((percent != null && isFinite(percent)) && (snapshot.value == null || !isFinite(snapshot.value))) {
+      snapshot.value = percent;
+    }
+    if (tooltipText && (!snapshot.rawLabel || tooltipText.length > snapshot.rawLabel.length)) {
+      snapshot.rawLabel = tooltipText;
+    }
+    if (!snapshot.category && categoryLabel) snapshot.category = categoryLabel;
+    if (metricValue != null) {
+      snapshot.metricValue = metricValue;
+      snapshot.xValue = metricValue;
+      if (metricUnit) snapshot.metricUnit = metricUnit;
+      if (metricLabel) snapshot.metricLabel = metricLabel;
+    }
+    if (!snapshot.category && snapshot.rawCategory) {
+      snapshot.category = snapshot.rawCategory;
+    }
   }
 
   function extractTooltipText(chart, svg, barEl) {
@@ -421,7 +610,7 @@
     }
 
     var hovered = 0;
-    var lastEntry = null;
+    var lastBucket = null;
     for (var i = 0; i < bars.length; i++) {
       var bar = bars[i];
       var point = (bar && bar.point) || (bar && bar.__dataPoint) || (bar && bar.parentNode && bar.parentNode.point) || null;
@@ -431,14 +620,17 @@
         continue;
       }
       var entry = getChartEntry(store, chart);
-      lastEntry = entry;
-      if (!entry || !entry.tooltips) {
+      var bucket = getPhaseBucket(entry, phaseLabel);
+      lastBucket = bucket;
+      if (!entry || !bucket || !(bucket.tooltips instanceof Map)) {
         logEvent('hover.point.skip', { phase: phaseLabel, idx: i, reason: 'noEntry' });
         continue;
       }
-      if (entry.phases) entry.phases.add(phaseLabel || '');
-      var tooltipMap = entry.tooltips;
-      if (tooltipMap.has(point)) {
+      if (entry.phaseNames) entry.phaseNames.add(normalizedPhase(phaseLabel));
+      var tooltipMap = bucket.tooltips;
+      var existingTip = tooltipMap.get(point);
+      var existingText = typeof existingTip === 'string' ? existingTip : existingTip && existingTip.text;
+      if (existingText) {
         logEvent('hover.point.skip', { phase: phaseLabel, idx: i, reason: 'alreadyCaptured' });
         continue;
       }
@@ -496,19 +688,22 @@
         }
       }
 
-      if (text) {
-        var normalized = norm(text);
-        tooltipMap.set(point, normalized);
+      var normalizedTip = norm(text || '');
+      if (normalizedTip) {
+        tooltipMap.set(point, { text: normalizedTip, phase: phaseLabel || '', capturedAt: Date.now() });
+        storeSnapshotForPhase(bucket, point, normalizedTip, phaseLabel);
         hovered++;
-        logEvent('hover.point.tooltip', { phase: phaseLabel, idx: i, source: tooltipSource || 'unknown', length: normalized.length, preview: normalized.slice(0, 120) });
+        logEvent('hover.point.tooltip', { phase: phaseLabel, idx: i, source: tooltipSource || 'unknown', length: normalizedTip.length, preview: normalizedTip.slice(0, 120) });
       } else {
+        tooltipMap.set(point, { text: '', phase: phaseLabel || '', capturedAt: Date.now() });
+        storeSnapshotForPhase(bucket, point, '', phaseLabel);
         logEvent('hover.point.tooltip.miss', { phase: phaseLabel, idx: i });
       }
 
       await sleep(16);
     }
 
-    var stored = lastEntry && lastEntry.tooltips ? lastEntry.tooltips.size : 0;
+    var stored = lastBucket && lastBucket.snapshots ? lastBucket.snapshots.size : 0;
     logEvent('hover.complete', { phase: phaseLabel, hovered: hovered, stored: stored });
   }
 
@@ -603,45 +798,52 @@
       return out;
     }
     store.forEach(function (entry, chart) {
-      if (!entry || !chart || !(entry.tooltips instanceof Map) || entry.tooltips.size === 0) return;
-      var seriesMap = new Map();
-      entry.tooltips.forEach(function (tip, point) {
-        if (!point || !point.series) return;
-        var seriesObj = point.series;
-        var seriesEntry = seriesMap.get(seriesObj);
-        if (!seriesEntry) {
-          seriesEntry = {
-            ref: seriesObj,
-            data: { name: seriesObj.name || '', type: seriesObj.type || '', points: [] }
-          };
-          seriesMap.set(seriesObj, seriesEntry);
+      if (!entry || !chart || !(entry.phases instanceof Map) || entry.phases.size === 0) return;
+      entry.phases.forEach(function (bucket) {
+        if (!bucket || !(bucket.snapshots instanceof Map) || bucket.snapshots.size === 0) return;
+        var seriesMap = new Map();
+        bucket.snapshots.forEach(function (snapshot) {
+          var key = snapshot.seriesName || '';
+          var seriesEntry = seriesMap.get(key);
+          if (!seriesEntry) {
+            seriesEntry = { name: snapshot.seriesName || '', type: snapshot.seriesType || '', points: [] };
+            seriesMap.set(key, seriesEntry);
+          }
+          seriesEntry.points.push({
+            index: snapshot.index,
+            category: snapshot.category || snapshot.metricLabel || snapshot.rawCategory || '',
+            value: snapshot.value,
+            rawLabel: snapshot.rawLabel || null,
+            metricValue: snapshot.metricValue != null ? snapshot.metricValue : null,
+            metricUnit: snapshot.metricUnit || null,
+            metricLabel: snapshot.metricLabel || null,
+            xValue: snapshot.xValue != null ? snapshot.xValue : (snapshot.metricValue != null ? snapshot.metricValue : null)
+          });
+        });
+        var seriesArr = Array.from(seriesMap.values());
+        seriesArr.forEach(function (serie) {
+          serie.points.sort(function (a, b) {
+            var ai = (typeof a.index === 'number' && isFinite(a.index)) ? a.index : 0;
+            var bi = (typeof b.index === 'number' && isFinite(b.index)) ? b.index : 0;
+            return ai - bi;
+          });
+        });
+        seriesArr.sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); });
+        var phaseLabel = bucket.label || '';
+        var baseKind = guessKind(chart);
+        var phaseKind = normalizedPhase(phaseLabel);
+        if (phaseKind === 'runtime' || phaseKind === 'memory') {
+          baseKind = phaseKind;
         }
-        var idx = (typeof point.index === 'number') ? point.index : ((typeof point.x === 'number') ? point.x : seriesEntry.data.points.length);
-        seriesEntry.data.points.push({
-          index: idx,
-          category: stringCategory(point, seriesObj),
-          value: (point.y != null) ? Number(point.y) : null,
-          rawLabel: tip || null
+        out.push({
+          chartIndex: chart.index != null ? chart.index : null,
+          kind: baseKind,
+          phase: phaseLabel || null,
+          title: titleFromChart(chart),
+          subtitle: subtitleFromChart(chart),
+          renderToId: (chart.renderTo && chart.renderTo.id) || null,
+          series: seriesArr
         });
-      });
-      if (!seriesMap.size) return;
-      var seriesArr = [];
-      seriesMap.forEach(function (wrapper) {
-        wrapper.data.points.sort(function (a, b) {
-          var ai = typeof a.index === 'number' ? a.index : 0;
-          var bi = typeof b.index === 'number' ? b.index : 0;
-          return ai - bi;
-        });
-        seriesArr.push(wrapper.data);
-      });
-      seriesArr.sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); });
-      out.push({
-        chartIndex: chart.index != null ? chart.index : null,
-        kind: guessKind(chart),
-        title: titleFromChart(chart),
-        subtitle: subtitleFromChart(chart),
-        renderToId: (chart.renderTo && chart.renderTo.id) || null,
-        series: seriesArr
       });
     });
     logEvent('gather.complete', { charts: out.length });
