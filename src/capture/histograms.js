@@ -498,7 +498,11 @@
 
       if (text) {
         var normalized = norm(text);
-        tooltipMap.set(point, normalized);
+        var parsed = parseHistogramTooltip(normalized);
+        if (!parsed.text) parsed.text = normalized;
+        if (parsed.count == null && typeof point.y === 'number') parsed.count = Number(point.y);
+        if (!parsed.bucketLabel) parsed.bucketLabel = stringCategory(point, point.series) || String(i);
+        tooltipMap.set(point, parsed);
         hovered++;
         logEvent('hover.point.tooltip', { phase: phaseLabel, idx: i, source: tooltipSource || 'unknown', length: normalized.length, preview: normalized.slice(0, 120) });
       } else {
@@ -565,37 +569,6 @@
     return false;
   }
 
-  function extractSeries(chart, series, tooltipMap) {
-    if (!series || !Array.isArray(series.data) || !series.data.length) return null;
-    var svg = (chart && chart.container && chart.container.querySelector) ? chart.container.querySelector('svg.highcharts-root') : null;
-    var points = [];
-    for (var i = 0; i < series.data.length; i++) {
-      var p = series.data[i];
-      if (!p) continue;
-      var label = stringCategory(p, series);
-      var value = (p.y != null) ? Number(p.y) : null;
-      var tooltip = tooltipMap && tooltipMap.get(p) || null;
-      if (!tooltip && (p.pointTooltip || typeof p.getLabelText === 'function')) {
-        try { tooltip = norm(p.getLabelText && p.getLabelText()); } catch (_) {}
-      }
-      if (!tooltip && p.graphic && p.graphic.element) {
-        tooltip = extractTooltipText(chart, svg, p.graphic.element) || null;
-      }
-      points.push({
-        index: i,
-        category: label,
-        value: value,
-        rawLabel: tooltip || null
-      });
-    }
-    if (!points.length) return null;
-    return {
-      name: series.name || '',
-      type: series.type || '',
-      points: points
-    };
-  }
-
   function gatherOnce(store) {
     var out = [];
     if (!store || typeof store.forEach !== 'function') {
@@ -605,8 +578,11 @@
     store.forEach(function (entry, chart) {
       if (!entry || !chart || !(entry.tooltips instanceof Map) || entry.tooltips.size === 0) return;
       var seriesMap = new Map();
-      entry.tooltips.forEach(function (tip, point) {
+      entry.tooltips.forEach(function (tipInfo, point) {
         if (!point || !point.series) return;
+        var info = tipInfo;
+        if (!info || typeof info !== 'object') info = { text: norm(String(tipInfo || '')) };
+        if (info.text == null) info.text = '';
         var seriesObj = point.series;
         var seriesEntry = seriesMap.get(seriesObj);
         if (!seriesEntry) {
@@ -617,11 +593,21 @@
           seriesMap.set(seriesObj, seriesEntry);
         }
         var idx = (typeof point.index === 'number') ? point.index : ((typeof point.x === 'number') ? point.x : seriesEntry.data.points.length);
+        var count = info.count != null ? info.count : (typeof point.y === 'number' ? Number(point.y) : null);
+        var bucketLabel = info.bucketLabel || stringCategory(point, seriesObj) || String(idx);
+        var metricVal = info.metricValue != null ? info.metricValue : null;
+        var metricUnit = info.metricUnit || null;
+        var percent = info.percent != null ? info.percent : null;
+        var value = count != null ? count : (typeof point.y === 'number' ? Number(point.y) : 0);
         seriesEntry.data.points.push({
           index: idx,
-          category: stringCategory(point, seriesObj),
-          value: (point.y != null) ? Number(point.y) : null,
-          rawLabel: tip || null
+          category: bucketLabel,
+          value: value,
+          count: count,
+          metric: metricVal,
+          unit: metricUnit,
+          percent: percent,
+          rawLabel: info.text || null
         });
       });
       if (!seriesMap.size) return;
@@ -641,6 +627,7 @@
         title: titleFromChart(chart),
         subtitle: subtitleFromChart(chart),
         renderToId: (chart.renderTo && chart.renderTo.id) || null,
+        phases: entry.phases ? Array.from(entry.phases) : [],
         series: seriesArr
       });
     });
