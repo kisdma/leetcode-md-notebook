@@ -218,7 +218,10 @@
       var term = (p.term || '').trim();
       var body = (p.md || '').trim();
       md += '<a id="glossary-' + p.label + '"></a>\n';
-      if (term) md += '> **' + term + '**\n';
+      if (term) {
+        md += '> **' + term + '**\n';
+        md += '>\n';
+      }
       if (body){
         var lines = body.split('\n');
         for (var j = 0; j < lines.length; j++){

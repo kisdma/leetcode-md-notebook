@@ -251,8 +251,12 @@
       var term = (p.term || '').trim();
       var body = (p.md || '').trim();
       md += '<a id="glossary-' + p.label + '"></a>\n';
-      if (term) md += '**' + term + '**  \n';
-      if (body) md += body.replace(/\n/g, '  \n');
+      if (term) md += '**' + term + '**\n\n';
+      if (body) {
+        md += body.replace(/\n/g, '  \n');
+      } else {
+        md += '(definition unavailable)';
+      }
       md += '\n\n';
     }
     return md;
