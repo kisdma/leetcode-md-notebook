@@ -222,69 +222,15 @@
 
 
 
-  function chartFromSvg(svg) {
-    if (!svg) return null;
-    var container = (typeof svg.closest === 'function') ? svg.closest('.highcharts-container') : null;
-    if (!container && svg.parentElement) container = svg.parentElement;
-    var containerId = container && container.id || null;
-    var charts = listCharts();
-
-    if (container && typeof container.getAttribute === 'function') {
-      var attr = container.getAttribute('data-highcharts-chart');
-      if (attr != null && attr !== '') {
-        var idx = Number(attr);
-        if (!isNaN(idx)) {
-          var arr = (pageWindow.Highcharts && Array.isArray(pageWindow.Highcharts.charts)) ? pageWindow.Highcharts.charts : [];
-          var candidate = charts[idx] || (arr[idx] || null);
-          if (candidate) {
-            logEvent('chart.match', { method: 'dataAttr', id: idx, success: true });
-            return candidate;
-          } else {
-            logEvent('chart.match', { method: 'dataAttr', id: idx, success: false });
-          }
-        }
-      }
+  function getChartEntry(store, chart) {
+    if (!chart) return null;
+    var entry = store.get(chart);
+    if (!entry) {
+      entry = { chart: chart, tooltips: new Map(), phases: new Set() };
+      store.set(chart, entry);
+      logEvent('chart.bind', { chartIndex: chart.index != null ? chart.index : null, title: norm(titleFromChart(chart) || '') });
     }
-
-    for (var i = 0; i < charts.length; i++) {
-      var chart = charts[i];
-      if (!chart) continue;
-      var c1 = chart.container;
-      var c2 = chart.renderTo;
-      var c1Id = (c1 && c1.id) || (c1 && c1.getAttribute && c1.getAttribute('id')) || null;
-      var c2Id = (c2 && c2.id) || (c2 && c2.getAttribute && c2.getAttribute('id')) || null;
-      if (containerId && (containerId === c1Id || containerId === c2Id)) {
-        logEvent('chart.match', { method: 'id', index: chart.index != null ? chart.index : i, containerId: containerId, success: true });
-        return chart;
-      }
-      try {
-        if (c1 && typeof c1.contains === 'function' && c1.contains(svg)) {
-          logEvent('chart.match', { method: 'container', index: chart.index != null ? chart.index : i, success: true });
-          return chart;
-        }
-      } catch (_) {}
-      try {
-        if (c2 && typeof c2.contains === 'function' && c2.contains(svg)) {
-          logEvent('chart.match', { method: 'renderTo', index: chart.index != null ? chart.index : i, success: true });
-          return chart;
-        }
-      } catch (_) {}
-      try {
-        if (c1 && typeof c1.querySelector === 'function') {
-          var root = c1.querySelector('svg.highcharts-root');
-          if (root === svg) {
-            logEvent('chart.match', { method: 'querySelector', index: chart.index != null ? chart.index : i, success: true });
-            return chart;
-          }
-        }
-      } catch (_) {}
-    }
-
-    if (container) {
-      var dataId = container.getAttribute && container.getAttribute('data-highcharts-chart');
-      logEvent('chart.match', { method: 'fallback', success: false, svgId: svg.id || null, containerId: containerId, dataId: dataId || null });
-    }
-    return null;
+    return entry;
   }
 
   function extractTooltipText(chart, svg, barEl) {
@@ -447,16 +393,15 @@
     logEvent('tab.ready', { label: name, chartsReady: ready });
     return { ok: true, tab: tab, chartsReady: ready };
   }
-  async function hoverBarsOnSvg(chart, svg, tooltipMap) {
-    if (!chart || !svg) {
-      logEvent('hover.skip', { reason: 'missingChartOrSvg' });
+  async function hoverBarsOnSvg(svg, phaseLabel, store) {
+    if (!svg) {
+      logEvent('hover.skip', { reason: 'missingSvg', phase: phaseLabel });
       return;
     }
     var bars = visibleNonZeroBars(svg);
-    var chartTitle = norm(titleFromChart(chart) || '');
-    logEvent('hover.start', { chart: chartTitle, svgId: svg.id || null, bars: bars.length });
+    logEvent('hover.start', { phase: phaseLabel, svgId: svg.id || null, bars: bars.length });
     if (!bars.length) {
-      logEvent('hover.empty', { chart: chartTitle, reason: 'noVisibleBars' });
+      logEvent('hover.empty', { phase: phaseLabel, reason: 'noVisibleBars' });
       return;
     }
 
@@ -476,16 +421,25 @@
     }
 
     var hovered = 0;
-
+    var lastEntry = null;
     for (var i = 0; i < bars.length; i++) {
       var bar = bars[i];
       var point = (bar && bar.point) || (bar && bar.__dataPoint) || (bar && bar.parentNode && bar.parentNode.point) || null;
-      if (!point || !point.series || point.series.chart !== chart) {
-        logEvent('hover.point.skip', { idx: i, reason: 'noPoint' });
+      var chart = point && point.series && point.series.chart;
+      if (!point || !chart) {
+        logEvent('hover.point.skip', { phase: phaseLabel, idx: i, reason: 'noPoint' });
         continue;
       }
-      if (tooltipMap && tooltipMap.has(point)) {
-        logEvent('hover.point.skip', { idx: i, reason: 'alreadyCaptured' });
+      var entry = getChartEntry(store, chart);
+      lastEntry = entry;
+      if (!entry || !entry.tooltips) {
+        logEvent('hover.point.skip', { phase: phaseLabel, idx: i, reason: 'noEntry' });
+        continue;
+      }
+      if (entry.phases) entry.phases.add(phaseLabel || '');
+      var tooltipMap = entry.tooltips;
+      if (tooltipMap.has(point)) {
+        logEvent('hover.point.skip', { phase: phaseLabel, idx: i, reason: 'alreadyCaptured' });
         continue;
       }
 
@@ -501,7 +455,7 @@
       var prevTS = TipWatch.get().ts;
       var pos = centerFromBBox(svg, bar);
       var categoryPreview = stringCategory(point, point.series) || '';
-      logEvent('hover.point.begin', { idx: i, category: categoryPreview, series: norm((point.series && point.series.name) || ''), hasGraphic: !!(point.graphic && point.graphic.element) });
+      logEvent('hover.point.begin', { phase: phaseLabel, idx: i, category: categoryPreview, series: norm((point.series && point.series.name) || ''), hasGraphic: !!(point.graphic && point.graphic.element) });
 
       fire(bar, 'pointerover', pos.x, pos.y);
       fire(target, 'pointermove', pos.x, pos.y);
@@ -515,7 +469,6 @@
         [pos.x - dx / 2, pos.y],
         [Math.min(pos.x + Math.max(2, pos.bb.width * 0.35), pos.x + dx * 2), pos.y]
       ];
-
       for (var j = 0; j < jiggle.length; j++) {
         var pair = jiggle[j];
         fire(target, 'pointermove', pair[0], pair[1]);
@@ -545,67 +498,51 @@
 
       if (text) {
         var normalized = norm(text);
-        if (tooltipMap) {
-          tooltipMap.set(point, normalized);
-        }
+        tooltipMap.set(point, normalized);
         hovered++;
-        logEvent('hover.point.tooltip', { idx: i, source: tooltipSource || 'unknown', length: normalized.length, preview: normalized.slice(0, 120) });
+        logEvent('hover.point.tooltip', { phase: phaseLabel, idx: i, source: tooltipSource || 'unknown', length: normalized.length, preview: normalized.slice(0, 120) });
       } else {
-        logEvent('hover.point.tooltip.miss', { idx: i });
+        logEvent('hover.point.tooltip.miss', { phase: phaseLabel, idx: i });
       }
 
       await sleep(16);
     }
 
-    logEvent('hover.complete', { chart: chartTitle, hovered: hovered, stored: tooltipMap ? tooltipMap.size : null });
+    var stored = lastEntry && lastEntry.tooltips ? lastEntry.tooltips.size : 0;
+    logEvent('hover.complete', { phase: phaseLabel, hovered: hovered, stored: stored });
   }
 
 
-
-
-  async function processPhase(label, tooltipByChart) {
-  logEvent('phase.start', { label: label });
-  var res = await clickSubpanel(label);
-  logEvent('phase.tab', { label: label, ok: !!(res && res.ok), chartsReady: !!(res && res.chartsReady) });
-  if (!res || !res.ok) {
-    return;
+  async function processPhase(label, store) {
+    logEvent('phase.start', { label: label });
+    var res = await clickSubpanel(label);
+    logEvent('phase.tab', { label: label, ok: !!(res && res.ok), chartsReady: !!(res && res.chartsReady) });
+    if (!res || !res.ok) {
+      return;
+    }
+    var anchor = res.tab || document.body;
+    var svgs = chartsNearTab(anchor);
+    logEvent('phase.svgs', { label: label, count: svgs.length });
+    var seen = new WeakSet();
+    for (var i = 0; i < svgs.length; i++) {
+      var svg = svgs[i];
+      if (!svg) continue;
+      if (seen.has(svg)) {
+        logEvent('phase.svg.skip', { label: label, index: i, reason: 'duplicate' });
+        continue;
+      }
+      seen.add(svg);
+      await hoverBarsOnSvg(svg, label, store);
+    }
   }
-  var anchor = res.tab || document.body;
-  var svgs = chartsNearTab(anchor);
-  logEvent('phase.svgs', { label: label, count: svgs.length });
-  var seen = new WeakSet();
-  for (var i = 0; i < svgs.length; i++) {
-    var svg = svgs[i];
-    if (!svg) continue;
-    if (seen.has(svg)) {
-      logEvent('phase.svg.skip', { label: label, index: i, reason: 'duplicate' });
-      continue;
-    }
-    seen.add(svg);
-    var chart = chartFromSvg(svg);
-    if (!chart) {
-      var cont = (typeof svg.closest === 'function') ? svg.closest('.highcharts-container') : null;
-      var dataId = cont && cont.getAttribute && cont.getAttribute('data-highcharts-chart');
-      logEvent('phase.svg.skip', { label: label, index: i, reason: 'noChart', containerId: cont && cont.id || null, dataId: dataId || null });
-      continue;
-    }
-    var tooltipMap = tooltipByChart.get(chart);
-    if (!tooltipMap) {
-      tooltipMap = new Map();
-      tooltipByChart.set(chart, tooltipMap);
-    }
-    logEvent('phase.chart', { label: label, index: i, title: norm(titleFromChart(chart) || '') });
-    await hoverBarsOnSvg(chart, svg, tooltipMap);
-  }
-}
 
 
-  async function processAllPhases(tooltipByChart) {
+  async function processAllPhases(store) {
     var labels = ['Runtime', 'Memory'];
     logEvent('phases.start', { labels: labels.join(',') });
     for (var i = 0; i < labels.length; i++) {
       try {
-        await processPhase(labels[i], tooltipByChart);
+        await processPhase(labels[i], store);
       } catch (e) {
         logEvent('phase.error', { label: labels[i], message: e && e.message });
       }
@@ -659,43 +596,66 @@
     };
   }
 
-  function gatherOnce(tooltipByChart) {
-    var chartsArr = listCharts();
-    logEvent('gather.start', { charts: chartsArr.length });
+  function gatherOnce(store) {
     var out = [];
-    for (var i = 0; i < chartsArr.length; i++) {
-      var chart = chartsArr[i];
-      if (!chart || !chart.series || !chart.series.length) continue;
-      var collected = [];
-      var tooltipMap = tooltipByChart ? tooltipByChart.get(chart) : null;
-      for (var s = 0; s < chart.series.length; s++) {
-        var series = chart.series[s];
-        if (!series || series.visible === false) continue;
-        var serData = extractSeries(chart, series, tooltipMap);
-        if (serData) collected.push(serData);
-      }
-      if (!collected.length) continue;
-      var entry = {
-        chartIndex: i,
+    if (!store || typeof store.forEach !== 'function') {
+      logEvent('gather.complete', { charts: 0, reason: 'noStore' });
+      return out;
+    }
+    store.forEach(function (entry, chart) {
+      if (!entry || !chart || !(entry.tooltips instanceof Map) || entry.tooltips.size === 0) return;
+      var seriesMap = new Map();
+      entry.tooltips.forEach(function (tip, point) {
+        if (!point || !point.series) return;
+        var seriesObj = point.series;
+        var seriesEntry = seriesMap.get(seriesObj);
+        if (!seriesEntry) {
+          seriesEntry = {
+            ref: seriesObj,
+            data: { name: seriesObj.name || '', type: seriesObj.type || '', points: [] }
+          };
+          seriesMap.set(seriesObj, seriesEntry);
+        }
+        var idx = (typeof point.index === 'number') ? point.index : ((typeof point.x === 'number') ? point.x : seriesEntry.data.points.length);
+        seriesEntry.data.points.push({
+          index: idx,
+          category: stringCategory(point, seriesObj),
+          value: (point.y != null) ? Number(point.y) : null,
+          rawLabel: tip || null
+        });
+      });
+      if (!seriesMap.size) return;
+      var seriesArr = [];
+      seriesMap.forEach(function (wrapper) {
+        wrapper.data.points.sort(function (a, b) {
+          var ai = typeof a.index === 'number' ? a.index : 0;
+          var bi = typeof b.index === 'number' ? b.index : 0;
+          return ai - bi;
+        });
+        seriesArr.push(wrapper.data);
+      });
+      seriesArr.sort(function (a, b) { return (a.name || '').localeCompare(b.name || ''); });
+      out.push({
+        chartIndex: chart.index != null ? chart.index : null,
         kind: guessKind(chart),
         title: titleFromChart(chart),
         subtitle: subtitleFromChart(chart),
         renderToId: (chart.renderTo && chart.renderTo.id) || null,
-        series: collected
-      };
-      out.push(entry);
-      logEvent('gather.chart', { index: i, title: norm(entry.title || ''), series: collected.length, tooltipMap: tooltipMap ? tooltipMap.size : null });
-    }
+        series: seriesArr
+      });
+    });
     logEvent('gather.complete', { charts: out.length });
     return out;
   }
+
+
 
   async function capture(opts) {
     opts = opts || {};
     var timeout = typeof opts.timeoutMs === 'number' ? opts.timeoutMs : 2000;
     var interval = typeof opts.intervalMs === 'number' ? opts.intervalMs : 120;
     var deadline = Date.now() + timeout;
-    var tooltipByChart = new Map();
+    var chartStore = new Map();
     var lastCharts = [];
     var attempt = 0;
 
@@ -704,9 +664,9 @@
 
     while (Date.now() <= deadline) {
       attempt += 1;
-      logEvent('capture.attempt', { attempt: attempt, tooltipCharts: tooltipByChart.size });
-      await processAllPhases(tooltipByChart);
-      var charts = gatherOnce(tooltipByChart);
+      logEvent('capture.attempt', { attempt: attempt, chartsTracked: chartStore.size });
+      await processAllPhases(chartStore);
+      var charts = gatherOnce(chartStore);
       if (charts.length) {
         logEvent('capture.success', { attempt: attempt, charts: charts.length });
         return { ok: true, charts: charts, capturedAt: nowISO() };
