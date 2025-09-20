@@ -125,65 +125,6 @@
     return norm(sub);
   }
 
-  function parseHistogramTooltip(text){
-    var out = { text: norm(text || '') };
-    if (!out.text) return out;
-    var clean = out.text.replace(/\\r/g, '').replace(/\\n/g, '\\n');
-    var sanitized = clean.replace(/[\\u00b5\\u03bc]/g, 'micro');
-    function numberFrom(str){
-      if (!str) return null;
-      var n = Number(str.replace(/[^0-9.\\-]+/g, ''));
-      return isNaN(n) ? null : n;
-    }
-    var countMatch = sanitized.match(/Count\\s*[:\\-]\\s*([0-9,]+)/i);
-    if (countMatch) out.count = numberFrom(countMatch[1]);
-    var percentMatch = sanitized.match(/([0-9]+(?:\\.[0-9]+)?)\\s*%/);
-    if (percentMatch) out.percent = numberFrom(percentMatch[1]);
-    var runtimeMatch = sanitized.match(/Runtime\\s*[:\\-]\\s*([0-9.,]+)\\s*(ms|s|sec|seconds|microseconds|micros|us)?/i);
-    if (runtimeMatch){
-      var rawVal = numberFrom(runtimeMatch[1]);
-      var unit = (runtimeMatch[2] || 'ms').toLowerCase();
-      if (rawVal != null){
-        var factor = 1;
-        if (unit.startsWith('s') && unit !== 'ms') factor = 1000;
-        if (unit === 'microseconds' || unit === 'micros' || unit === 'us') factor = 0.001;
-        out.metricValue = rawVal * factor;
-        out.metricUnit = 'ms';
-        out.bucketLabel = (rawVal + ' ' + (runtimeMatch[2] || 'ms')).trim();
-      }
-    }
-    var memoryMatch = sanitized.match(/Memory\\s*[:\\-]\\s*([0-9.,]+)\\s*(kb|mb|gb)/i);
-    if (memoryMatch){
-      var rawVal = numberFrom(memoryMatch[1]);
-      var unit = (memoryMatch[2] || 'MB').toLowerCase();
-      if (rawVal != null){
-        var converted = rawVal;
-        if (unit === 'kb') converted = rawVal / 1024;
-        if (unit === 'gb') converted = rawVal * 1024;
-        out.metricValue = converted;
-        out.metricUnit = 'MB';
-        out.bucketLabel = (rawVal + ' ' + memoryMatch[2]).trim();
-      }
-    }
-    if (!out.bucketLabel){
-      var generic = sanitized.match(/([0-9.,]+)\\s*(ms|mb|kb|gb)/i);
-      if (generic){
-        out.bucketLabel = generic[1] + ' ' + generic[2];
-        if (!out.metricValue){
-          var val = numberFrom(generic[1]);
-          var unit = generic[2].toLowerCase();
-          if (val != null){
-            if (unit === 'ms'){ out.metricValue = val; out.metricUnit = 'ms'; }
-            if (unit === 'mb'){ out.metricValue = val; out.metricUnit = 'MB'; }
-            if (unit === 'kb'){ out.metricValue = val / 1024; out.metricUnit = 'MB'; }
-            if (unit === 'gb'){ out.metricValue = val * 1024; out.metricUnit = 'MB'; }
-          }
-        }
-      }
-    }
-    return out;
-  }
-
   function guessKind(chart) {
     var base = (titleFromChart(chart) + ' ' + subtitleFromChart(chart)).toLowerCase();
     if (/runtime/.test(base)) return 'runtime';
@@ -280,41 +221,6 @@
   }
 
 
-
-  function chartFromSvg(svg) {
-    if (!svg) return null;
-    var charts = listCharts();
-    for (var i = 0; i < charts.length; i++) {
-      var chart = charts[i];
-      if (!chart) continue;
-      try {
-        if (chart.container && chart.container.contains && chart.container.contains(svg)) return chart;
-        if (chart.renderTo && chart.renderTo.contains && chart.renderTo.contains(svg)) return chart;
-      } catch (_) {}
-    }
-    return null;
-  }
-
-  function collectChartPoints(chart) {
-    var out = [];
-    if (!chart || !chart.series) return out;
-    for (var s = 0; s < chart.series.length; s++) {
-      var series = chart.series[s];
-      if (!series || series.visible === false) continue;
-      var data = series.points || series.data || [];
-      for (var i = 0; i < data.length; i++) {
-        var pt = data[i];
-        if (!pt) continue;
-        var el = pt.graphic && pt.graphic.element;
-        if (!el || typeof el.getBBox !== 'function') continue;
-        var bb;
-        try { bb = el.getBBox(); } catch (_) { bb = null; }
-        if (!bb || bb.width <= 0 || bb.height <= 0) continue;
-        out.push({ point: pt, element: el, series: series });
-      }
-    }
-    return out;
-  }
 
   function getChartEntry(store, chart) {
     if (!chart) return null;
@@ -492,18 +398,10 @@
       logEvent('hover.skip', { reason: 'missingSvg', phase: phaseLabel });
       return;
     }
-    var chart = chartFromSvg(svg);
-    if (!chart) {
-      logEvent('hover.skip', { reason: 'noChart', phase: phaseLabel, svgId: svg.id || null });
-      return;
-    }
-    var entry = getChartEntry(store, chart);
-    if (entry.phases) entry.phases.add(phaseLabel || '');
-    var chartTitle = norm(titleFromChart(chart) || '');
-    var pointsInfo = collectChartPoints(chart);
-    logEvent('hover.start', { phase: phaseLabel, chartIndex: chart.index != null ? chart.index : null, svgId: svg.id || null, title: chartTitle, points: pointsInfo.length });
-    if (!pointsInfo.length) {
-      logEvent('hover.empty', { phase: phaseLabel, reason: 'noPoints' });
+    var bars = visibleNonZeroBars(svg);
+    logEvent('hover.start', { phase: phaseLabel, svgId: svg.id || null, bars: bars.length });
+    if (!bars.length) {
+      logEvent('hover.empty', { phase: phaseLabel, reason: 'noVisibleBars' });
       return;
     }
 
@@ -521,19 +419,24 @@
         plotPt = { x: p2.x, y: p2.y };
       } catch (_) { plotPt = null; }
     }
-    if (chart.tooltip && chart.tooltip.hide) {
-      try { chart.tooltip.hide(0); } catch (_) {}
-    }
 
     var hovered = 0;
-    for (var i = 0; i < pointsInfo.length; i++) {
-      var info = pointsInfo[i];
-      var point = info && info.point;
-      var bar = info && info.element;
-      if (!point || !bar) {
+    var lastEntry = null;
+    for (var i = 0; i < bars.length; i++) {
+      var bar = bars[i];
+      var point = (bar && bar.point) || (bar && bar.__dataPoint) || (bar && bar.parentNode && bar.parentNode.point) || null;
+      var chart = point && point.series && point.series.chart;
+      if (!point || !chart) {
         logEvent('hover.point.skip', { phase: phaseLabel, idx: i, reason: 'noPoint' });
         continue;
       }
+      var entry = getChartEntry(store, chart);
+      lastEntry = entry;
+      if (!entry || !entry.tooltips) {
+        logEvent('hover.point.skip', { phase: phaseLabel, idx: i, reason: 'noEntry' });
+        continue;
+      }
+      if (entry.phases) entry.phases.add(phaseLabel || '');
       var tooltipMap = entry.tooltips;
       if (tooltipMap.has(point)) {
         logEvent('hover.point.skip', { phase: phaseLabel, idx: i, reason: 'alreadyCaptured' });
@@ -551,9 +454,9 @@
 
       var prevTS = TipWatch.get().ts;
       var pos = centerFromBBox(svg, bar);
-      logEvent('hover.point.begin', { phase: phaseLabel, idx: i, category: stringCategory(point, point.series) || '', series: norm((point.series && point.series.name) || ''), hasGraphic: !!(point.graphic && point.graphic.element) });
+      var categoryPreview = stringCategory(point, point.series) || '';
+      logEvent('hover.point.begin', { phase: phaseLabel, idx: i, category: categoryPreview, series: norm((point.series && point.series.name) || ''), hasGraphic: !!(point.graphic && point.graphic.element) });
 
-      try { point.onMouseOver && point.onMouseOver(); } catch (_) {}
       fire(bar, 'pointerover', pos.x, pos.y);
       fire(target, 'pointermove', pos.x, pos.y);
       await sleep(20);
@@ -595,11 +498,7 @@
 
       if (text) {
         var normalized = norm(text);
-        var parsed = parseHistogramTooltip(normalized);
-        if (!parsed.text) parsed.text = normalized;
-        if (parsed.count == null && typeof point.y === 'number') parsed.count = Number(point.y);
-        if (!parsed.bucketLabel) parsed.bucketLabel = stringCategory(point, point.series) || String(i);
-        entry.tooltips.set(point, parsed);
+        tooltipMap.set(point, normalized);
         hovered++;
         logEvent('hover.point.tooltip', { phase: phaseLabel, idx: i, source: tooltipSource || 'unknown', length: normalized.length, preview: normalized.slice(0, 120) });
       } else {
@@ -609,10 +508,8 @@
       await sleep(16);
     }
 
-    if (chart.tooltip && chart.tooltip.hide) {
-      try { chart.tooltip.hide(0); } catch (_) {}
-    }
-    logEvent('hover.complete', { phase: phaseLabel, hovered: hovered, stored: entry.tooltips.size });
+    var stored = lastEntry && lastEntry.tooltips ? lastEntry.tooltips.size : 0;
+    logEvent('hover.complete', { phase: phaseLabel, hovered: hovered, stored: stored });
   }
 
 
@@ -668,14 +565,39 @@
     return false;
   }
 
+  function extractSeries(chart, series, tooltipMap) {
+    if (!series || !Array.isArray(series.data) || !series.data.length) return null;
+    var svg = (chart && chart.container && chart.container.querySelector) ? chart.container.querySelector('svg.highcharts-root') : null;
+    var points = [];
+    for (var i = 0; i < series.data.length; i++) {
+      var p = series.data[i];
+      if (!p) continue;
+      var label = stringCategory(p, series);
+      var value = (p.y != null) ? Number(p.y) : null;
+      var tooltip = tooltipMap && tooltipMap.get(p) || null;
+      if (!tooltip && (p.pointTooltip || typeof p.getLabelText === 'function')) {
+        try { tooltip = norm(p.getLabelText && p.getLabelText()); } catch (_) {}
+      }
+      if (!tooltip && p.graphic && p.graphic.element) {
+        tooltip = extractTooltipText(chart, svg, p.graphic.element) || null;
+      }
+      points.push({
+        index: i,
+        category: label,
+        value: value,
+        rawLabel: tooltip || null
+      });
+    }
+    if (!points.length) return null;
+    return {
+      name: series.name || '',
+      type: series.type || '',
+      points: points
+    };
+  }
+
   function gatherOnce(store) {
     var out = [];
-    var size = (store && typeof store.size === 'number') ? store.size : 0;
-    if (size) {
-      logEvent('gather.start', { charts: size });
-    } else {
-      logEvent('gather.start', { charts: 0, reason: 'noStore' });
-    }
     if (!store || typeof store.forEach !== 'function') {
       logEvent('gather.complete', { charts: 0, reason: 'noStore' });
       return out;
@@ -683,11 +605,8 @@
     store.forEach(function (entry, chart) {
       if (!entry || !chart || !(entry.tooltips instanceof Map) || entry.tooltips.size === 0) return;
       var seriesMap = new Map();
-      entry.tooltips.forEach(function (tipInfo, point) {
+      entry.tooltips.forEach(function (tip, point) {
         if (!point || !point.series) return;
-        var info = tipInfo;
-        if (!info || typeof info !== 'object') info = { text: norm(String(tipInfo || '')) };
-        if (info.text == null) info.text = '';
         var seriesObj = point.series;
         var seriesEntry = seriesMap.get(seriesObj);
         if (!seriesEntry) {
@@ -698,21 +617,11 @@
           seriesMap.set(seriesObj, seriesEntry);
         }
         var idx = (typeof point.index === 'number') ? point.index : ((typeof point.x === 'number') ? point.x : seriesEntry.data.points.length);
-        var count = info.count != null ? info.count : (typeof point.y === 'number' ? Number(point.y) : null);
-        var bucketLabel = info.bucketLabel || stringCategory(point, seriesObj) || String(idx);
-        var metricVal = info.metricValue != null ? info.metricValue : null;
-        var metricUnit = info.metricUnit || null;
-        var percent = info.percent != null ? info.percent : null;
-        var value = count != null ? count : (typeof point.y === 'number' ? Number(point.y) : 0);
         seriesEntry.data.points.push({
           index: idx,
-          category: bucketLabel,
-          value: value,
-          count: count,
-          metric: metricVal,
-          unit: metricUnit,
-          percent: percent,
-          rawLabel: info.text || null
+          category: stringCategory(point, seriesObj),
+          value: (point.y != null) ? Number(point.y) : null,
+          rawLabel: tip || null
         });
       });
       if (!seriesMap.size) return;
@@ -732,7 +641,6 @@
         title: titleFromChart(chart),
         subtitle: subtitleFromChart(chart),
         renderToId: (chart.renderTo && chart.renderTo.id) || null,
-        phases: entry.phases ? Array.from(entry.phases) : [],
         series: seriesArr
       });
     });
