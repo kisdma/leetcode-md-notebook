@@ -620,13 +620,20 @@
         continue;
       }
       var entry = getChartEntry(store, chart);
-      var bucket = getPhaseBucket(entry, phaseLabel);
+      var chartKind = guessKind(chart) || '';
+      var normalizedChartKind = normalizedPhase(chartKind);
+      var normalizedRequested = normalizedPhase(phaseLabel || '');
+      var effectiveLabel = phaseLabel || '';
+      if (normalizedChartKind && normalizedChartKind !== 'histogram' && normalizedChartKind !== normalizedRequested) {
+        effectiveLabel = chartKind || phaseLabel || normalizedChartKind;
+      }
+      var bucket = getPhaseBucket(entry, effectiveLabel);
       lastBucket = bucket;
       if (!entry || !bucket || !(bucket.tooltips instanceof Map)) {
         logEvent('hover.point.skip', { phase: phaseLabel, idx: i, reason: 'noEntry' });
         continue;
       }
-      if (entry.phaseNames) entry.phaseNames.add(normalizedPhase(phaseLabel));
+      if (entry.phaseNames) entry.phaseNames.add(normalizedPhase(effectiveLabel));
       var tooltipMap = bucket.tooltips;
       var existingTip = tooltipMap.get(point);
       var existingText = typeof existingTip === 'string' ? existingTip : existingTip && existingTip.text;
@@ -690,13 +697,13 @@
 
       var normalizedTip = norm(text || '');
       if (normalizedTip) {
-        tooltipMap.set(point, { text: normalizedTip, phase: phaseLabel || '', capturedAt: Date.now() });
-        storeSnapshotForPhase(bucket, point, normalizedTip, phaseLabel);
+        tooltipMap.set(point, { text: normalizedTip, phase: effectiveLabel || '', capturedAt: Date.now() });
+        storeSnapshotForPhase(bucket, point, normalizedTip, effectiveLabel);
         hovered++;
         logEvent('hover.point.tooltip', { phase: phaseLabel, idx: i, source: tooltipSource || 'unknown', length: normalizedTip.length, preview: normalizedTip.slice(0, 120) });
       } else {
-        tooltipMap.set(point, { text: '', phase: phaseLabel || '', capturedAt: Date.now() });
-        storeSnapshotForPhase(bucket, point, '', phaseLabel);
+        tooltipMap.set(point, { text: '', phase: effectiveLabel || '', capturedAt: Date.now() });
+        storeSnapshotForPhase(bucket, point, '', effectiveLabel);
         logEvent('hover.point.tooltip.miss', { phase: phaseLabel, idx: i });
       }
 
